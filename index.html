@@ -146,7 +146,7 @@
 
       <div id="newPane" class="hidden">
         <p class="muted">New to Pet Keeper? Make your account right here — pick an email and <b>create your password</b>. That's it. You will never need "forgot password" to get started.</p>
-        <p class="muted">One thing to know: <b>Mary approves every account by hand</b>, so after you make your account you'll land in the waiting room until she says yes. That's the whole hold-up — nothing else to fill out.</p>
+        <p class="muted">One thing to know: after you make your account you'll land in the waiting room — joining there (one quick payment) is what opens the door. That's the whole step — nothing else to fill out.</p>
         <label for="nuEmail">Email</label>
         <input id="nuEmail" type="email" autocomplete="email" placeholder="you@example.com">
         <label for="nuPass">Create your password</label>
@@ -170,14 +170,9 @@
     </div>
     <div class="card">
       <p>You're signed in as <b id="waitEmail">—</b>.</p>
-      <p>Pet Keeper is a small, hand-run place: <b>Mary approves every account herself</b> before the pets open up. That's what keeps everybody's pet pages private.</p>
-      <p id="waitStatus" class="muted">If you haven't asked yet, tap the button below and your email goes on Mary's list.</p>
+      <p>Pet Keeper is a small, hand-run place, and every account is private — your pet pages are yours alone.</p>
+      <p id="waitStatus" class="muted">Join below and Pet Keeper lets you in automatically, as soon as your payment finishes. Use the same email here and at checkout — then come back here and sign in (or refresh) and you'll walk right in.</p>
       <div id="waitMsg" class="msg"></div>
-      <p style="margin-top:14px;"><button class="btn" id="waitRequestBtn" type="button">🙋 Request access</button></p>
-      <p><button class="btn secondary" id="waitRecheckBtn" type="button">I've been approved — let me in</button></p>
-      <hr style="border:none;border-top:1px solid var(--line);margin:18px 0;">
-      <h3 style="margin-top:0;">Get Pet Keeper</h3>
-      <p class="small muted">Or skip the line: join below and Pet Keeper lets you in automatically, as soon as your payment finishes. Use the same email here and at checkout.</p>
       <p><button class="btn" id="payMonthlyBtn" type="button">Join monthly — $3.99/month</button></p>
       <p><button class="btn secondary" id="payYearlyBtn" type="button">Join yearly — $29.99/year (save a chunk)</button></p>
       <div id="payMsg" class="msg"></div>
@@ -336,7 +331,8 @@
         <p>The one-paste setup still needs running in the Supabase dashboard (Pet Keeper project → SQL Editor). Until then the door is still open the old way — nobody is being kept out yet, and these lists can't fill in.</p>
       </div>
       <div class="card">
-        <h2>🙋 Asking to get in</h2>
+        <h2>🙋 Asked before pay-only</h2>
+        <p class="small muted">Knocks from before the pay-only door went in. New people join with the pay buttons now — approving anyone here lets them in FREE, so it's your emergency key only.</p>
         <div id="officeRequests"></div>
       </div>
       <div class="card">
@@ -386,14 +382,18 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 "use strict";
-/* ================= Pet Keeper v3 - sell build =================
-   v3 keeps the v2 door (below) and adds the shop front: a 💬 Tell
+/* ================= Pet Keeper v4 - pay-only build =================
+   v4 (2026-11-08, Mary's call after Tiffany's knock: "No it's all
+   pay now") removes the waiting room's Request access door: nobody
+   knocks for a hand approval anymore - the only public way in is the
+   pay buttons (paying still IS the approval, via stripe-pet-webhook).
+   The Office keeps its approve/remove buttons as Mary's emergency
+   key, and Emily stays the only approved-without-paying account.
+   v3 kept the v2 door and added the shop front: a 💬 Tell
    Mary feedback door in the waiting room and the app (saved to the
    feedback table, then emailed to Mary), Get Pet Keeper pay buttons
    in the waiting room (Stripe links live in the PAY_* constants
-   below), and automatic approval when a payment lands (the
-   stripe-pet-webhook function adds the payer's email to
-   approved_emails, so paying IS the approval - no Office tap needed).
+   below), and automatic approval when a payment lands.
    v2 added Mary's door: after sign-in, the account side is asked one
    question (RPC current_email_is_approved) - is this email approved?
    Owners are always in. Approved people get the full app. Everyone
@@ -857,62 +857,7 @@ function showWaiting(){
   $("waitScreen").classList.remove("hidden");
   $("waitEmail").textContent = user && user.email ? user.email : "—";
   hideMsg($("waitMsg"));
-  requestOnFile = false;
-  var btn = $("waitRequestBtn");
-  btn.disabled = false; btn.textContent = "🙋 Request access";
-  $("waitStatus").textContent = "If you haven't asked yet, tap the button below and your email goes on Mary's list.";
-  // If a request is already on file, say so - the button shouldn't pretend otherwise.
-  if(sb && user){
-    sb.from("access_requests").select("email").eq("email", String(user.email || "").toLowerCase()).maybeSingle()
-    .then(function(r){
-      if(r && r.data){
-        requestOnFile = true;
-        btn.disabled = true; btn.textContent = "Request sent ✓";
-        $("waitStatus").textContent = "Your request is already in — Mary has your email on her list. Once she approves you, tap \u201CI've been approved — let me in\u201D below.";
-      }
-    }).catch(function(){});
-  }
-}
-function ringDoorbell(){
-  // Exactly one email to Mary per recorded request, rung by the tap
-  // that recorded it - there is no second path (no database webhook).
-  // Best effort only: if the doorbell function isn't deployed yet,
-  // this quietly does nothing and the request still stands.
-  try {
-    sb.functions.invoke("notify-access-request", {body: {email: String(user.email || "").toLowerCase()}})
-      .then(function(){}, function(){});
-  } catch(e){}
-}
-function requestAccess(){
-  var btn = $("waitRequestBtn");
-  if(requestOnFile){
-    showMsg($("waitMsg"), "Your request is already in — Mary has your email on her list. Once she approves you, tap \u201CI've been approved — let me in\u201D.", true);
-    return;
-  }
-  btn.disabled = true; btn.textContent = "Sending…";
-  sb.rpc("request_access").then(function(r){
-    if(r && r.error) throw r.error;
-    requestOnFile = true;
-    btn.textContent = "Request sent ✓";
-    showMsg($("waitMsg"), "Your request is in! Once Mary approves you, come back, sign in, and you'll walk right in.", true);
-    ringDoorbell();
-  }).catch(function(e){
-    btn.disabled = false; btn.textContent = "🙋 Request access";
-    showMsg($("waitMsg"), "The request didn't go through. Try again in a moment.");
-  });
-}
-function recheckGate(){
-  var btn = $("waitRecheckBtn");
-  btn.disabled = true; btn.textContent = "Checking…";
-  resolveGate().then(function(state){
-    btn.disabled = false; btn.textContent = "I've been approved — let me in";
-    if(state === "waiting"){
-      showMsg($("waitMsg"), "Not yet — Mary hasn't approved this email so far. Your request stays on her list.");
-      return;
-    }
-    toast("You're in! 🐾");
-    enterApproved();
-  });
+  $("waitStatus").textContent = "Join below and Pet Keeper lets you in automatically, as soon as your payment finishes. Use the same email here and at checkout — then come back here and sign in (or refresh) and you'll walk right in.";
 }
 /* ---------- Tell Mary (feedback door) ----------
    Same flow as Gift Keeper: the message saves into the feedback
@@ -1129,8 +1074,6 @@ function init(){
   $("nuPass2").addEventListener("keydown", function(e){ if(e.key === "Enter") createAccount(); });
   $("signOutBtn").addEventListener("click", signOut);
   $("officeBtn").addEventListener("click", openOffice);
-  $("waitRequestBtn").addEventListener("click", requestAccess);
-  $("waitRecheckBtn").addEventListener("click", recheckGate);
   $("waitSignOutBtn").addEventListener("click", signOut);
   $("waitFeedbackBtn").addEventListener("click", openFeedback);
   $("feedbackBtn").addEventListener("click", openFeedback);
