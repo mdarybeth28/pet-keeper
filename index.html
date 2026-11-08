@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pet Keeper</title>
+<link rel="shortcut icon" href="favicon.ico">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
   :root{
     --green:#2f7d4f; --green-dark:#256b42; --green-soft:#e7f2ea;
@@ -65,6 +69,12 @@
        border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:8px 0;background:#fff;cursor:pointer;}
   .rec .rt{font-weight:700;}
   .rec .rd{font-size:.88rem;color:var(--muted);}
+  .orow{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;
+       border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:8px 0;background:#fff;}
+  .orow .oe{font-weight:700;word-break:break-all;}
+  .orow .om{font-size:.88rem;color:var(--muted);}
+  .orow .obtns{display:flex;gap:8px;flex-wrap:wrap;}
+  .orow .obtns .btn{width:auto;padding:11px 16px;min-height:48px;font-size:1rem;}
   .pill{display:inline-block;font-size:.78rem;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;}
   .pill.overdue{background:var(--warn);color:#fff;}
   .pill.soon{background:#e7c65a;color:#4d3d05;}
@@ -136,6 +146,7 @@
 
       <div id="newPane" class="hidden">
         <p class="muted">New to Pet Keeper? Make your account right here — pick an email and <b>create your password</b>. That's it. You will never need "forgot password" to get started.</p>
+        <p class="muted">One thing to know: <b>Mary approves every account by hand</b>, so after you make your account you'll land in the waiting room until she says yes. That's the whole hold-up — nothing else to fill out.</p>
         <label for="nuEmail">Email</label>
         <input id="nuEmail" type="email" autocomplete="email" placeholder="you@example.com">
         <label for="nuPass">Create your password</label>
@@ -150,11 +161,31 @@
   </div>
 </div>
 
+<!-- ============ WAITING ROOM (signed in, not approved yet) ============ -->
+<div id="waitScreen" class="hidden">
+  <div class="wrap">
+    <div class="center" style="margin-top:26px;">
+      <div class="big-emoji">🐾</div>
+      <h1>You're in line</h1>
+    </div>
+    <div class="card">
+      <p>You're signed in as <b id="waitEmail">—</b>.</p>
+      <p>Pet Keeper is a small, hand-run place: <b>Mary approves every account herself</b> before the pets open up. That's what keeps everybody's pet pages private.</p>
+      <p id="waitStatus" class="muted">If you haven't asked yet, tap the button below and your email goes on Mary's list.</p>
+      <div id="waitMsg" class="msg"></div>
+      <p style="margin-top:14px;"><button class="btn" id="waitRequestBtn" type="button">🙋 Request access</button></p>
+      <p><button class="btn secondary" id="waitRecheckBtn" type="button">I've been approved — let me in</button></p>
+      <p class="center"><button class="iconbtn" id="waitSignOutBtn" type="button">Sign out</button></p>
+    </div>
+  </div>
+</div>
+
 <!-- ============ APP SHELL ============ -->
 <div id="appScreen" class="hidden">
   <header class="top">
     <div class="brand">🐾 Pet Keeper<small id="whoLine"></small></div>
     <div>
+      <button class="iconbtn hidden" id="officeBtn" type="button">🏠 Office</button>
       <button class="iconbtn" id="settingsBtn" type="button">⚙️ Settings</button>
       <button class="iconbtn" id="signOutBtn" type="button">Sign out</button>
     </div>
@@ -273,6 +304,28 @@
       <p class="noprint"><button class="btn plain" id="sumPrintBtn" type="button">🖨️ Print this sheet</button></p>
     </section>
 
+    <!-- ===== OFFICE (owner only) ===== -->
+    <section id="view-office" class="hidden">
+      <p><button class="iconbtn" data-back type="button">← All pets</button></p>
+      <div id="officeSetupNote" class="card hidden" style="background:var(--amber-soft);border-color:#eadfae;">
+        <h2>⚠️ Office setup isn't finished</h2>
+        <p>The one-paste setup still needs running in the Supabase dashboard (Pet Keeper project → SQL Editor). Until then the door is still open the old way — nobody is being kept out yet, and these lists can't fill in.</p>
+      </div>
+      <div class="card">
+        <h2>🙋 Asking to get in</h2>
+        <div id="officeRequests"></div>
+      </div>
+      <div class="card">
+        <h2>✅ Approved people</h2>
+        <div id="officeApproved"></div>
+      </div>
+      <div class="card">
+        <h2>👀 Who's here</h2>
+        <div id="officePeople"></div>
+        <p class="small muted">Counts only — you can see how many pets somebody keeps here, never what's inside their pages. Their pets stay theirs.</p>
+      </div>
+    </section>
+
     <!-- ===== SETTINGS ===== -->
     <section id="view-settings" class="hidden">
       <p><button class="iconbtn" data-back type="button">← All pets</button></p>
@@ -306,7 +359,17 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 "use strict";
-/* ================= Pet Keeper v1 spine =================
+/* ================= Pet Keeper v2 - Office + approval gate =================
+   v2 adds Mary's door: after sign-in, the account side is asked one
+   question (RPC current_email_is_approved) - is this email approved?
+   Owners are always in. Approved people get the full app. Everyone
+   else lands in the waiting room and can request access; no
+   pets/records queries fire for them. The owner gets an Office
+   (requests, the approved list, who's here with counts only) driven
+   by security-definer RPCs. If the one-paste setup has not been run
+   yet, the question itself fails and the app fails OPEN to the old
+   behavior - and tells the owner in the Office - so a half-finished
+   setup never locks anybody out.
    Account-first, always: the Supabase account copy is the truth.
    This device keeps NO separate copy of the pet list, so an empty
    screen can never overwrite a full account. Every add/edit/delete
@@ -322,6 +385,12 @@ var currentPetId = null;
 var editingPetId = null;
 var editingRecordId = null;
 var lockArmedThisLoad = false;
+var OWNER_EMAILS = ["marybeth.davis28@gmail.com", "affiliatefindstools@gmail.com"];
+var approvalState = "unknown"; /* approved | waiting | open (setup not run yet - old behavior) */
+var gateSetupMissing = false;
+var requestOnFile = false;
+function ownerEmail(e){ return OWNER_EMAILS.indexOf(String(e || "").toLowerCase()) >= 0; }
+function isOwnerUser(){ return !!(user && ownerEmail(user.email)); }
 
 function $(id){ return document.getElementById(id); }
 function esc(s){
@@ -406,7 +475,7 @@ function maybeLock(){
 }
 
 /* ---------- navigation ---------- */
-var VIEWS = ["view-home","view-pet","view-pet-form","view-record-form","view-summary","view-settings"];
+var VIEWS = ["view-home","view-pet","view-pet-form","view-record-form","view-summary","view-settings","view-office"];
 function showView(id){
   VIEWS.forEach(function(v){ $(v).classList.toggle("hidden", v !== id); });
   window.scrollTo(0,0);
@@ -690,19 +759,129 @@ function deleteRecord(){
 }
 
 /* ---------- auth ---------- */
-function enterApp(){
-  $("whoLine").textContent = user && user.email ? user.email : "";
-  $("setEmail").textContent = user && user.email ? user.email : "—";
-  $("authScreen").classList.add("hidden");
+/* ---------- the approval gate ----------
+   One question after sign-in: is this email approved? Owners are
+   always in (both of Mary's emails, checked right here AND inside
+   the database helpers). If the one-paste setup hasn't been run,
+   the question itself errors - the app then fails OPEN to the old
+   behavior and flags it for the owner in the Office, so nobody is
+   ever locked out by a half-finished setup. */
+function resolveGate(){
+  var mine = isOwnerUser();
+  var finish = function(state, missing){
+    approvalState = state;
+    gateSetupMissing = !!missing;
+    return state;
+  };
+  if(!sb || !user) return Promise.resolve(finish(mine ? "approved" : "open", true));
+  return sb.rpc("current_email_is_approved").then(function(r){
+    if(r && r.error) return finish(mine ? "approved" : "open", true);
+    if(mine) return finish("approved", false);
+    return finish(r && r.data === true ? "approved" : "waiting", false);
+  }).catch(function(){
+    return finish(mine ? "approved" : "open", true);
+  });
+}
+function touchProfile(){
+  // "Who's here" bookkeeping: one row per person, refreshed on entry.
+  // Best effort only - a failure here never blocks the door.
+  if(!sb || !user) return;
+  try {
+    sb.from("profiles").upsert(
+      {user_id: user.id, email: String(user.email || "").toLowerCase(), last_seen: new Date().toISOString()},
+      {onConflict: "user_id"}
+    ).then(function(){}, function(){});
+  } catch(e){}
+}
+function enterApproved(){
+  $("waitScreen").classList.add("hidden");
+  $("officeBtn").classList.toggle("hidden", !isOwnerUser());
   if(maybeLock()) return;
   $("appScreen").classList.remove("hidden");
   showView("view-home");
   loadAll();
 }
-function showAuth(){
-  user = null; pets = []; records = []; currentPetId = null;
+function enterApp(){
+  $("whoLine").textContent = user && user.email ? user.email : "";
+  $("setEmail").textContent = user && user.email ? user.email : "—";
+  $("authScreen").classList.add("hidden");
+  resolveGate().then(function(state){
+    touchProfile();
+    if(state === "waiting"){ showWaiting(); return; }
+    enterApproved();
+  });
+}
+function showWaiting(){
   $("appScreen").classList.add("hidden");
   $("lockScreen").classList.add("hidden");
+  $("authScreen").classList.add("hidden");
+  $("waitScreen").classList.remove("hidden");
+  $("waitEmail").textContent = user && user.email ? user.email : "—";
+  hideMsg($("waitMsg"));
+  requestOnFile = false;
+  var btn = $("waitRequestBtn");
+  btn.disabled = false; btn.textContent = "🙋 Request access";
+  $("waitStatus").textContent = "If you haven't asked yet, tap the button below and your email goes on Mary's list.";
+  // If a request is already on file, say so - the button shouldn't pretend otherwise.
+  if(sb && user){
+    sb.from("access_requests").select("email").eq("email", String(user.email || "").toLowerCase()).maybeSingle()
+    .then(function(r){
+      if(r && r.data){
+        requestOnFile = true;
+        btn.disabled = true; btn.textContent = "Request sent ✓";
+        $("waitStatus").textContent = "Your request is already in — Mary has your email on her list. Once she approves you, tap \u201CI've been approved — let me in\u201D below.";
+      }
+    }).catch(function(){});
+  }
+}
+function ringDoorbell(){
+  // Exactly one email to Mary per recorded request, rung by the tap
+  // that recorded it - there is no second path (no database webhook).
+  // Best effort only: if the doorbell function isn't deployed yet,
+  // this quietly does nothing and the request still stands.
+  try {
+    sb.functions.invoke("notify-access-request", {body: {email: String(user.email || "").toLowerCase()}})
+      .then(function(){}, function(){});
+  } catch(e){}
+}
+function requestAccess(){
+  var btn = $("waitRequestBtn");
+  if(requestOnFile){
+    showMsg($("waitMsg"), "Your request is already in — Mary has your email on her list. Once she approves you, tap \u201CI've been approved — let me in\u201D.", true);
+    return;
+  }
+  btn.disabled = true; btn.textContent = "Sending…";
+  sb.rpc("request_access").then(function(r){
+    if(r && r.error) throw r.error;
+    requestOnFile = true;
+    btn.textContent = "Request sent ✓";
+    showMsg($("waitMsg"), "Your request is in! Once Mary approves you, come back, sign in, and you'll walk right in.", true);
+    ringDoorbell();
+  }).catch(function(e){
+    btn.disabled = false; btn.textContent = "🙋 Request access";
+    showMsg($("waitMsg"), "The request didn't go through. Try again in a moment.");
+  });
+}
+function recheckGate(){
+  var btn = $("waitRecheckBtn");
+  btn.disabled = true; btn.textContent = "Checking…";
+  resolveGate().then(function(state){
+    btn.disabled = false; btn.textContent = "I've been approved — let me in";
+    if(state === "waiting"){
+      showMsg($("waitMsg"), "Not yet — Mary hasn't approved this email so far. Your request stays on her list.");
+      return;
+    }
+    toast("You're in! 🐾");
+    enterApproved();
+  });
+}
+function showAuth(){
+  user = null; pets = []; records = []; currentPetId = null;
+  approvalState = "unknown"; requestOnFile = false;
+  $("appScreen").classList.add("hidden");
+  $("lockScreen").classList.add("hidden");
+  $("waitScreen").classList.add("hidden");
+  $("officeBtn").classList.add("hidden");
   $("authScreen").classList.remove("hidden");
 }
 function signIn(){
@@ -752,6 +931,98 @@ function signOut(){
   sb.auth.signOut().then(function(){ lockArmedThisLoad = false; showAuth(); });
 }
 
+/* ---------- owner office (owners only) ----------
+   Everything here runs on the owner_overview RPC (counts only -
+   the owner never browses anybody else's pet pages) and the
+   approve / reject / remove RPCs, which check the owner inside
+   the database too. */
+var officePeople = [];
+function openOffice(){
+  if(!isOwnerUser()){ showView("view-home"); return; }
+  showView("view-office");
+  renderOffice();
+}
+function renderOffice(){
+  $("officeSetupNote").classList.toggle("hidden", !gateSetupMissing);
+  if(gateSetupMissing){
+    $("officeRequests").innerHTML = '<p class="muted">Nothing here yet — the setup comes first.</p>';
+    $("officeApproved").innerHTML = '<p class="muted">Nothing here yet — the setup comes first.</p>';
+    $("officePeople").innerHTML = '<p class="muted">Nothing here yet — the setup comes first.</p>';
+    return;
+  }
+  $("officeRequests").innerHTML = '<p class="muted">Loading…</p>';
+  $("officeApproved").innerHTML = '<p class="muted">Loading…</p>';
+  $("officePeople").innerHTML = '<p class="muted">Loading…</p>';
+  sb.rpc("owner_overview").then(function(r){
+    if(r && r.error) throw r.error;
+    officePeople = (r && r.data) || [];
+    paintOffice();
+  }).catch(function(e){
+    var t = "Couldn't load the office list just now. Try again in a moment.";
+    $("officeRequests").innerHTML = '<p class="muted">' + t + '</p>';
+    $("officeApproved").innerHTML = '<p class="muted">' + t + '</p>';
+    $("officePeople").innerHTML = '<p class="muted">' + t + '</p>';
+  });
+}
+function paintOffice(){
+  var pending = officePeople.filter(function(p){ return p.requested && !p.approved; });
+  var approved = officePeople.filter(function(p){ return p.approved; });
+  var rq = $("officeRequests");
+  rq.innerHTML = pending.length ? "" : '<p class="muted">Nobody is waiting right now.</p>';
+  pending.forEach(function(p){
+    var div = document.createElement("div");
+    div.className = "orow";
+    div.innerHTML = '<div><div class="oe">' + esc(p.email) + '</div><div class="om">Asked to get in</div></div>';
+    var btns = document.createElement("div"); btns.className = "obtns";
+    var ab = document.createElement("button"); ab.className = "btn"; ab.type = "button"; ab.textContent = "Approve";
+    ab.addEventListener("click", function(){ officeDecide("approve", p.email); });
+    var rb = document.createElement("button"); rb.className = "btn secondary"; rb.type = "button"; rb.textContent = "Turn down";
+    rb.addEventListener("click", function(){ officeDecide("reject", p.email); });
+    btns.appendChild(ab); btns.appendChild(rb);
+    div.appendChild(btns);
+    rq.appendChild(div);
+  });
+  var ap = $("officeApproved");
+  ap.innerHTML = approved.length ? "" : '<p class="muted">Nobody approved yet.</p>';
+  approved.forEach(function(p){
+    var div = document.createElement("div");
+    div.className = "orow";
+    div.innerHTML = '<div><div class="oe">' + esc(p.email) + (p.is_owner ? ' <span class="pill soon">You</span>' : '') + '</div>' +
+      '<div class="om">' + (p.is_owner ? "Owner account — always in" : "Can sign in and use Pet Keeper") + '</div></div>';
+    if(!p.is_owner){
+      var btns = document.createElement("div"); btns.className = "obtns";
+      var rb = document.createElement("button"); rb.className = "btn danger"; rb.type = "button"; rb.textContent = "Remove access";
+      rb.addEventListener("click", function(){ officeDecide("remove", p.email); });
+      btns.appendChild(rb); div.appendChild(btns);
+    }
+    ap.appendChild(div);
+  });
+  var wp = $("officePeople");
+  wp.innerHTML = officePeople.length ? "" : '<p class="muted">Nobody has shown up yet.</p>';
+  officePeople.forEach(function(p){
+    var div = document.createElement("div");
+    div.className = "orow";
+    var status = p.is_owner ? "Owner" : (p.approved ? "Approved" : (p.requested ? "Waiting for your OK" : "Signed up, hasn't asked"));
+    var seen = p.last_seen ? " · Last seen " + new Date(p.last_seen).toLocaleDateString("en-US", {month:"short", day:"numeric"}) : "";
+    div.innerHTML = '<div><div class="oe">' + esc(p.email) + '</div>' +
+      '<div class="om">' + esc(status) + " · " + Number(p.pet_count || 0) + (Number(p.pet_count) === 1 ? " pet" : " pets") +
+      " · " + Number(p.record_count || 0) + (Number(p.record_count) === 1 ? " record" : " records") + esc(seen) + '</div></div>';
+    wp.appendChild(div);
+  });
+}
+function officeDecide(kind, email){
+  if(kind === "remove" && ownerEmail(email)){
+    toast("That one's an owner account — it stays.");
+    return;
+  }
+  var rpcName = kind === "approve" ? "approve_access_request" : (kind === "reject" ? "reject_access_request" : "remove_approved_email");
+  sb.rpc(rpcName, {target_email: email}).then(function(r){
+    if(r && r.error) throw r.error;
+    toast(kind === "approve" ? email + " can now sign in 🐾" : (kind === "reject" ? email + " was turned down." : email + " can no longer sign in."));
+    renderOffice();
+  }).catch(function(e){ toast(friendlyErr(e)); });
+}
+
 /* ---------- wire up ---------- */
 function init(){
   if(!window.supabase){
@@ -775,6 +1046,10 @@ function init(){
   $("siPass").addEventListener("keydown", function(e){ if(e.key === "Enter") signIn(); });
   $("nuPass2").addEventListener("keydown", function(e){ if(e.key === "Enter") createAccount(); });
   $("signOutBtn").addEventListener("click", signOut);
+  $("officeBtn").addEventListener("click", openOffice);
+  $("waitRequestBtn").addEventListener("click", requestAccess);
+  $("waitRecheckBtn").addEventListener("click", recheckGate);
+  $("waitSignOutBtn").addEventListener("click", signOut);
   $("setSignOutBtn").addEventListener("click", signOut);
   $("settingsBtn").addEventListener("click", function(){
     var lk = lockGet();
