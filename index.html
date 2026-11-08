@@ -175,7 +175,30 @@
       <div id="waitMsg" class="msg"></div>
       <p style="margin-top:14px;"><button class="btn" id="waitRequestBtn" type="button">🙋 Request access</button></p>
       <p><button class="btn secondary" id="waitRecheckBtn" type="button">I've been approved — let me in</button></p>
+      <hr style="border:none;border-top:1px solid var(--line);margin:18px 0;">
+      <h3 style="margin-top:0;">Get Pet Keeper</h3>
+      <p class="small muted">Or skip the line: join below and Pet Keeper lets you in automatically, as soon as your payment finishes. Use the same email here and at checkout.</p>
+      <p><button class="btn" id="payMonthlyBtn" type="button">Join monthly — $3.99/month</button></p>
+      <p><button class="btn secondary" id="payYearlyBtn" type="button">Join yearly — $29.99/year (save a chunk)</button></p>
+      <div id="payMsg" class="msg"></div>
+      <p class="small muted">Emily and family are already in — new friends join here.</p>
+      <p><button class="btn plain" id="waitFeedbackBtn" type="button">💬 Tell Mary</button></p>
       <p class="center"><button class="iconbtn" id="waitSignOutBtn" type="button">Sign out</button></p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TELL MARY (feedback sheet) ============ -->
+<div id="feedbackScreen" class="overlay hidden">
+  <div class="wrap">
+    <div class="card" style="margin-top:40px;">
+      <h1>💬 Tell Mary</h1>
+      <p class="muted">Tell me what's happening — a problem, an idea, anything.</p>
+      <label for="fbMessage">Your message</label>
+      <textarea id="fbMessage" maxlength="4000" placeholder="Type it here…" style="min-height:130px;"></textarea>
+      <div id="fbMsg" class="msg"></div>
+      <p style="margin-top:14px;"><button class="btn" id="fbSendBtn" type="button">Send</button></p>
+      <p class="center"><button class="iconbtn" id="fbCancelBtn" type="button">Not now</button></p>
     </div>
   </div>
 </div>
@@ -185,6 +208,7 @@
   <header class="top">
     <div class="brand">🐾 Pet Keeper<small id="whoLine"></small></div>
     <div>
+      <button class="iconbtn" id="feedbackBtn" type="button">💬 Tell Mary</button>
       <button class="iconbtn hidden" id="officeBtn" type="button">🏠 Office</button>
       <button class="iconbtn" id="settingsBtn" type="button">⚙️ Settings</button>
       <button class="iconbtn" id="signOutBtn" type="button">Sign out</button>
@@ -332,6 +356,9 @@
       <div class="card">
         <h1>Settings</h1>
         <div class="kv"><div class="k">Signed in as</div><div class="v" id="setEmail">—</div></div>
+        <h3>💬 Tell Mary</h3>
+        <p class="small muted">Something not working, or an idea for Pet Keeper? Send Mary a note right from here.</p>
+        <p><button class="btn plain" id="setFeedbackBtn" type="button">💬 Tell Mary</button></p>
         <h3>🔒 Screen lock (optional)</h3>
         <div class="switchrow">
           <p style="margin:0;">Use a code to open Pet Keeper on <b>this device</b></p>
@@ -359,8 +386,15 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 "use strict";
-/* ================= Pet Keeper v2 - Office + approval gate =================
-   v2 adds Mary's door: after sign-in, the account side is asked one
+/* ================= Pet Keeper v3 - sell build =================
+   v3 keeps the v2 door (below) and adds the shop front: a 💬 Tell
+   Mary feedback door in the waiting room and the app (saved to the
+   feedback table, then emailed to Mary), Get Pet Keeper pay buttons
+   in the waiting room (Stripe links live in the PAY_* constants
+   below), and automatic approval when a payment lands (the
+   stripe-pet-webhook function adds the payer's email to
+   approved_emails, so paying IS the approval - no Office tap needed).
+   v2 added Mary's door: after sign-in, the account side is asked one
    question (RPC current_email_is_approved) - is this email approved?
    Owners are always in. Approved people get the full app. Everyone
    else lands in the waiting room and can request access; no
@@ -377,6 +411,11 @@
    is re-read from the account. Merge, never replace — per row.   */
 var SUPABASE_URL = "https://iuaibtdrcoxcrgihzfmi.supabase.co";
 var SUPABASE_KEY = "sb_publishable_O8GS4YTIuK3tEkkmdGoF_Q_EASb1cJh";
+/* Stripe payment links go here once they exist (sell build). Until a
+   constant holds a real link, its button shows a friendly "almost
+   ready" note instead of sending anybody anywhere. */
+const PAY_MONTHLY_URL = "https://buy.stripe.com/aFacN5dsG8uX5dz0xB0ZW03";
+const PAY_YEARLY_URL = "https://buy.stripe.com/9B68wP3S68uXaxTeor0ZW02";
 var sb = null;
 var user = null;
 var pets = [];
@@ -875,12 +914,55 @@ function recheckGate(){
     enterApproved();
   });
 }
+/* ---------- Tell Mary (feedback door) ----------
+   Same flow as Gift Keeper: the message saves into the feedback
+   table first (so it is never lost), then send-feedback emails it
+   to Mary. A failed save keeps the text and says so, plainly. */
+function openFeedback(){
+  hideMsg($("fbMsg"));
+  $("feedbackScreen").classList.remove("hidden");
+}
+function closeFeedback(){ $("feedbackScreen").classList.add("hidden"); }
+function sendFeedback(){
+  var message = $("fbMessage").value.trim();
+  var msg = $("fbMsg"); hideMsg(msg);
+  if(message.length < 3){ showMsg(msg, "Type a sentence or two so Mary knows what's happening."); return; }
+  var email = user && user.email ? String(user.email).toLowerCase() : null;
+  var btn = $("fbSendBtn"); btn.disabled = true; btn.textContent = "Sending…";
+  sb.from("feedback").insert({message: message, sender_email: email, user_email: email}).select("id").single()
+  .then(function(res){
+    if(res.error || !res.data) throw new Error("Feedback didn't save");
+    return sb.functions.invoke("send-feedback", {body: {message: message, user_email: email}});
+  })
+  .then(function(inv){
+    btn.disabled = false; btn.textContent = "Send";
+    if(inv && inv.error) console.error("Feedback saved but the email didn't send", inv.error);
+    $("fbMessage").value = "";
+    closeFeedback();
+    toast("Got it — thank you! 💚");
+  })
+  .catch(function(e){
+    btn.disabled = false; btn.textContent = "Send";
+    console.error("Feedback didn't send", e);
+    showMsg(msg, "Your message didn't send. It's still written above — try again in a moment.");
+  });
+}
+/* ---------- Get Pet Keeper (pay buttons) ---------- */
+function openPay(kind){
+  var url = kind === "yearly" ? PAY_YEARLY_URL : PAY_MONTHLY_URL;
+  if(!url || url.indexOf("_HERE") >= 0){
+    showMsg($("payMsg"), "Almost ready — check back in a little bit 🐾", true);
+    return;
+  }
+  window.location.href = url;
+}
 function showAuth(){
   user = null; pets = []; records = []; currentPetId = null;
   approvalState = "unknown"; requestOnFile = false;
   $("appScreen").classList.add("hidden");
   $("lockScreen").classList.add("hidden");
   $("waitScreen").classList.add("hidden");
+  $("feedbackScreen").classList.add("hidden");
   $("officeBtn").classList.add("hidden");
   $("authScreen").classList.remove("hidden");
 }
@@ -1050,6 +1132,13 @@ function init(){
   $("waitRequestBtn").addEventListener("click", requestAccess);
   $("waitRecheckBtn").addEventListener("click", recheckGate);
   $("waitSignOutBtn").addEventListener("click", signOut);
+  $("waitFeedbackBtn").addEventListener("click", openFeedback);
+  $("feedbackBtn").addEventListener("click", openFeedback);
+  $("setFeedbackBtn").addEventListener("click", openFeedback);
+  $("fbSendBtn").addEventListener("click", sendFeedback);
+  $("fbCancelBtn").addEventListener("click", closeFeedback);
+  $("payMonthlyBtn").addEventListener("click", function(){ openPay("monthly"); });
+  $("payYearlyBtn").addEventListener("click", function(){ openPay("yearly"); });
   $("setSignOutBtn").addEventListener("click", signOut);
   $("settingsBtn").addEventListener("click", function(){
     var lk = lockGet();
