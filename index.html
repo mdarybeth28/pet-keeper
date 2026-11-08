@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pet Keeper</title>
+<style>
+  :root{
+    --green:#2f7d4f; --green-dark:#256b42; --green-soft:#e7f2ea;
+    --page:#faf6ef; --card:#ffffff; --ink:#2b2b26; --muted:#6f6a5e;
+    --line:#e3ddd0; --warn:#b3261e; --warn-soft:#fbeae8; --amber:#8a6d1a; --amber-soft:#fbf3d9;
+    --radius:16px;
+  }
+  *{box-sizing:border-box;}
+  html{font-size:18px;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+       background:var(--page);color:var(--ink);line-height:1.45;}
+  .wrap{max-width:760px;margin:0 auto;padding:16px 16px 48px;}
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:8px;
+       max-width:760px;margin:0 auto;padding:14px 16px 0;}
+  .brand{font-size:1.45rem;font-weight:800;color:var(--green-dark);}
+  .brand small{display:block;font-size:.82rem;font-weight:600;color:var(--muted);}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+       padding:18px;margin:14px 0;box-shadow:0 1px 3px rgba(60,50,20,.06);}
+  h1{font-size:1.6rem;margin:.2em 0 .4em;}
+  h2{font-size:1.25rem;margin:.2em 0 .5em;color:var(--green-dark);}
+  h3{font-size:1.05rem;margin:1em 0 .35em;color:var(--green-dark);}
+  p{margin:.4em 0;}
+  .muted{color:var(--muted);}
+  .small{font-size:.88rem;}
+  label{display:block;font-weight:700;margin:14px 0 6px;}
+  input,select,textarea{width:100%;font-size:1rem;padding:13px 14px;border:1.5px solid var(--line);
+       border-radius:12px;background:#fff;color:var(--ink);font-family:inherit;}
+  input:focus,select,textarea:focus{outline:2px solid var(--green);outline-offset:1px;}
+  textarea{min-height:74px;resize:vertical;}
+  .btn{display:inline-block;width:100%;text-align:center;background:var(--green);color:#fff;border:none;
+       font-size:1.08rem;font-weight:700;padding:15px 18px;border-radius:12px;cursor:pointer;
+       min-height:54px;text-decoration:none;font-family:inherit;}
+  .btn:active{background:var(--green-dark);}
+  .btn.secondary{background:#fff;color:var(--green-dark);border:2px solid var(--green);}
+  .btn.plain{background:var(--green-soft);color:var(--green-dark);}
+  .btn.danger{background:#fff;color:var(--warn);border:2px solid var(--warn);}
+  .btnrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
+  .btnrow .btn{flex:1 1 160px;width:auto;}
+  .iconbtn{background:var(--green-soft);color:var(--green-dark);border:none;border-radius:10px;
+       font-size:.95rem;font-weight:700;padding:10px 14px;cursor:pointer;min-height:44px;font-family:inherit;}
+  .tabs{display:flex;gap:8px;margin:6px 0 4px;}
+  .tabs button{flex:1;padding:13px 8px;font-size:1rem;font-weight:700;border-radius:12px;cursor:pointer;
+       border:2px solid var(--green);background:#fff;color:var(--green-dark);font-family:inherit;min-height:50px;}
+  .tabs button.on{background:var(--green);color:#fff;}
+  .petgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:6px;}
+  .petcard{background:#fff;border:1.5px solid var(--line);border-radius:var(--radius);padding:18px 12px;
+       text-align:center;cursor:pointer;box-shadow:0 1px 3px rgba(60,50,20,.06);}
+  .petcard:active{border-color:var(--green);}
+  .petface{font-size:3rem;line-height:1.1;}
+  .petinitial{width:64px;height:64px;margin:2px auto 4px;border-radius:50%;background:var(--green-soft);
+       color:var(--green-dark);font-size:1.9rem;font-weight:800;display:flex;align-items:center;justify-content:center;}
+  .petname{font-size:1.15rem;font-weight:800;margin-top:6px;word-break:break-word;}
+  .petmeta{font-size:.85rem;color:var(--muted);}
+  .due{border-radius:12px;padding:12px 14px;margin:8px 0;font-size:.98rem;}
+  .due.overdue{background:var(--warn-soft);border:1.5px solid #eec5c1;}
+  .due.soon{background:var(--amber-soft);border:1.5px solid #eadfae;}
+  .due b{font-weight:800;}
+  .rec{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;
+       border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:8px 0;background:#fff;cursor:pointer;}
+  .rec .rt{font-weight:700;}
+  .rec .rd{font-size:.88rem;color:var(--muted);}
+  .pill{display:inline-block;font-size:.78rem;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;}
+  .pill.overdue{background:var(--warn);color:#fff;}
+  .pill.soon{background:#e7c65a;color:#4d3d05;}
+  .kv{margin:6px 0;}
+  .kv .k{font-size:.82rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+  .kv .v{font-size:1.05rem;}
+  a.call{display:inline-block;background:var(--green);color:#fff;font-weight:700;text-decoration:none;
+       padding:12px 18px;border-radius:12px;min-height:48px;margin-top:6px;}
+  .msg{border-radius:12px;padding:12px 14px;margin:12px 0;display:none;}
+  .msg.err{display:block;background:var(--warn-soft);border:1.5px solid #eec5c1;color:#7c1a14;}
+  .msg.ok{display:block;background:var(--green-soft);border:1.5px solid #bcd8c4;color:var(--green-dark);}
+  #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--green-dark);color:#fff;
+       padding:13px 20px;border-radius:999px;font-weight:700;font-size:.98rem;box-shadow:0 4px 14px rgba(0,0,0,.25);
+       opacity:0;pointer-events:none;transition:opacity .25s;max-width:92vw;text-align:center;z-index:60;}
+  #toast.show{opacity:1;}
+  .overlay{position:fixed;inset:0;background:var(--page);z-index:50;overflow:auto;}
+  .seg{display:flex;gap:8px;}
+  .seg button{flex:1;padding:14px 8px;font-size:1.05rem;font-weight:700;border-radius:12px;cursor:pointer;
+       border:2px solid var(--line);background:#fff;color:var(--ink);font-family:inherit;min-height:54px;}
+  .seg button.on{border-color:var(--green);background:var(--green-soft);color:var(--green-dark);}
+  .switchrow{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .hidden{display:none !important;}
+  .center{text-align:center;}
+  .big-emoji{font-size:3.4rem;text-align:center;line-height:1.15;}
+  @media print{ header.top,.noprint{display:none !important;} body{background:#fff;} .card{box-shadow:none;} }
+</style>
+</head>
+<body>
+
+<!-- ============ LOCK OVERLAY (only shown if Mary turns the optional lock ON) ============ -->
+<div id="lockScreen" class="overlay hidden">
+  <div class="wrap">
+    <div class="card center" style="margin-top:40px;">
+      <div class="big-emoji">🐾</div>
+      <h1>Pet Keeper is locked</h1>
+      <p class="muted">Type your code to open it on this device.</p>
+      <label for="lockCode">Your code</label>
+      <input id="lockCode" type="password" inputmode="numeric" autocomplete="off" maxlength="12" style="text-align:center;font-size:1.3rem;">
+      <div id="lockMsg" class="msg err"></div>
+      <p><button class="btn" id="lockOpenBtn">Open</button></p>
+      <p><button class="iconbtn" id="lockSignOutBtn">Sign out instead</button></p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ AUTH ============ -->
+<div id="authScreen" class="hidden">
+  <div class="wrap">
+    <div class="center" style="margin-top:26px;">
+      <div class="big-emoji">🐾</div>
+      <h1>Pet Keeper</h1>
+      <p class="muted">Every pet, every shot, every vet visit —<br>all in one place, on every device you use.</p>
+    </div>
+    <div class="card">
+      <div class="tabs">
+        <button id="tabSignIn" class="on" type="button">Sign in</button>
+        <button id="tabNew" type="button">I'm new here</button>
+      </div>
+
+      <div id="signInPane">
+        <label for="siEmail">Email</label>
+        <input id="siEmail" type="email" autocomplete="email" placeholder="you@example.com">
+        <label for="siPass">Password</label>
+        <input id="siPass" type="password" autocomplete="current-password" placeholder="Your password">
+        <div id="siMsg" class="msg"></div>
+        <p style="margin-top:16px;"><button class="btn" id="signInBtn">Sign in</button></p>
+        <p class="center"><button class="iconbtn" id="forgotBtn" type="button">I forgot my password</button></p>
+      </div>
+
+      <div id="newPane" class="hidden">
+        <p class="muted">New to Pet Keeper? Make your account right here — pick an email and <b>create your password</b>. That's it. You will never need "forgot password" to get started.</p>
+        <label for="nuEmail">Email</label>
+        <input id="nuEmail" type="email" autocomplete="email" placeholder="you@example.com">
+        <label for="nuPass">Create your password</label>
+        <input id="nuPass" type="password" autocomplete="new-password" placeholder="At least 6 characters">
+        <label for="nuPass2">Type it once more</label>
+        <input id="nuPass2" type="password" autocomplete="new-password" placeholder="Same password again">
+        <div id="nuMsg" class="msg"></div>
+        <p style="margin-top:16px;"><button class="btn" id="createBtn">Create my account</button></p>
+      </div>
+    </div>
+    <p class="center small muted">Your pets live in your account — sign in on your phone, your tablet, or your computer and see the same list.</p>
+  </div>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="appScreen" class="hidden">
+  <header class="top">
+    <div class="brand">🐾 Pet Keeper<small id="whoLine"></small></div>
+    <div>
+      <button class="iconbtn" id="settingsBtn" type="button">⚙️ Settings</button>
+      <button class="iconbtn" id="signOutBtn" type="button">Sign out</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+
+    <!-- ===== HOME ===== -->
+    <section id="view-home">
+      <div id="dueCard" class="card hidden">
+        <h2>⏰ Coming due</h2>
+        <div id="dueList"></div>
+      </div>
+      <div class="card">
+        <h2>Your pets</h2>
+        <div id="petGrid" class="petgrid"></div>
+        <p id="noPets" class="muted hidden">No pets yet. Tap the button below and add your first one — it saves straight to your account.</p>
+        <p style="margin-top:14px;"><button class="btn" id="addPetBtn">➕ Add a pet</button></p>
+      </div>
+    </section>
+
+    <!-- ===== PET DETAIL ===== -->
+    <section id="view-pet" class="hidden">
+      <p><button class="iconbtn" data-back type="button">← All pets</button></p>
+      <div class="card">
+        <div class="center">
+          <div id="pdFace" class="petface"></div>
+          <h1 id="pdName"></h1>
+          <p class="muted" id="pdMeta"></p>
+        </div>
+        <div id="pdBasics"></div>
+        <h3>🏥 Vet</h3>
+        <div id="pdVet"></div>
+        <div class="btnrow">
+          <button class="btn secondary" id="pdEditBtn" type="button">✏️ Edit pet</button>
+          <button class="btn plain" id="pdSummaryBtn" type="button">📋 Show summary</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Records</h2>
+        <div id="pdRecords"></div>
+        <p style="margin-top:12px;"><button class="btn" id="pdAddRecBtn" type="button">➕ Add a record</button></p>
+        <p class="small muted">A record is anything with a date: a vaccination, a medicine, a checkup. You type the name and the dates — Pet Keeper just keeps them and reminds you what's coming due.</p>
+      </div>
+      <div class="card">
+        <button class="btn danger" id="pdDeleteBtn" type="button">Remove this pet</button>
+      </div>
+    </section>
+
+    <!-- ===== PET FORM ===== -->
+    <section id="view-pet-form" class="hidden">
+      <p><button class="iconbtn" id="petFormBack" type="button">← Back</button></p>
+      <div class="card">
+        <h1 id="petFormTitle">Add a pet</h1>
+        <label for="pfName">Name *</label>
+        <input id="pfName" type="text" placeholder="Biscuit">
+        <label>Dog or cat? *</label>
+        <div class="seg" id="pfSpeciesSeg">
+          <button type="button" data-sp="dog" class="on">🐶 Dog</button>
+          <button type="button" data-sp="cat">🐱 Cat</button>
+        </div>
+        <label for="pfBreed">Breed</label>
+        <input id="pfBreed" type="text" placeholder="Beagle, tabby, mixed…">
+        <label for="pfBirthday">Birthday (or best guess)</label>
+        <input id="pfBirthday" type="date">
+        <label for="pfWeight">Weight</label>
+        <input id="pfWeight" type="text" placeholder="12 lb">
+        <h3>🏥 Vet</h3>
+        <label for="pfVetClinic">Vet clinic</label>
+        <input id="pfVetClinic" type="text" placeholder="Happy Paws Animal Clinic">
+        <label for="pfVetName">Vet's name</label>
+        <input id="pfVetName" type="text" placeholder="Dr. Smith">
+        <label for="pfVetPhone">Vet phone</label>
+        <input id="pfVetPhone" type="tel" placeholder="555-123-4567">
+        <h3>🍽️ Everyday things</h3>
+        <label for="pfFood">Food</label>
+        <input id="pfFood" type="text" placeholder="What they eat, and how much">
+        <label for="pfAllergies">Allergies</label>
+        <input id="pfAllergies" type="text" placeholder="Chicken, certain medicines…">
+        <label for="pfNotes">Notes &amp; quirks</label>
+        <textarea id="pfNotes" placeholder="Scared of thunder. Loves the blue blanket. Anything worth remembering."></textarea>
+        <div id="pfMsg" class="msg"></div>
+        <p style="margin-top:16px;"><button class="btn" id="petSaveBtn">Save pet</button></p>
+      </div>
+    </section>
+
+    <!-- ===== RECORD FORM ===== -->
+    <section id="view-record-form" class="hidden">
+      <p><button class="iconbtn" id="recFormBack" type="button">← Back</button></p>
+      <div class="card">
+        <h1 id="recFormTitle">Add a record</h1>
+        <label>What kind?</label>
+        <div class="seg" id="rfKindSeg">
+          <button type="button" data-kind="vaccination" class="on">💉 Vaccination</button>
+          <button type="button" data-kind="medicine">💊 Medicine</button>
+          <button type="button" data-kind="other">📝 Other</button>
+        </div>
+        <label for="rfTitle">Name *</label>
+        <input id="rfTitle" type="text" placeholder="Rabies shot, heartworm pill…">
+        <label for="rfDateGiven">Date given</label>
+        <input id="rfDateGiven" type="date">
+        <label for="rfNextDue">Next due (leave blank if there isn't one)</label>
+        <input id="rfNextDue" type="date">
+        <label for="rfNotes">Notes</label>
+        <textarea id="rfNotes" placeholder="Where it was done, how they took it…"></textarea>
+        <div id="rfMsg" class="msg"></div>
+        <p style="margin-top:16px;"><button class="btn" id="recSaveBtn">Save record</button></p>
+        <p id="recDeleteWrap" class="hidden"><button class="btn danger" id="recDeleteBtn" type="button">Remove this record</button></p>
+      </div>
+    </section>
+
+    <!-- ===== SUMMARY ===== -->
+    <section id="view-summary" class="hidden">
+      <p class="noprint"><button class="iconbtn" id="sumBack" type="button">← Back to pet</button></p>
+      <div class="card" id="summaryCard"></div>
+      <p class="noprint"><button class="btn plain" id="sumPrintBtn" type="button">🖨️ Print this sheet</button></p>
+    </section>
+
+    <!-- ===== SETTINGS ===== -->
+    <section id="view-settings" class="hidden">
+      <p><button class="iconbtn" data-back type="button">← All pets</button></p>
+      <div class="card">
+        <h1>Settings</h1>
+        <div class="kv"><div class="k">Signed in as</div><div class="v" id="setEmail">—</div></div>
+        <h3>🔒 Screen lock (optional)</h3>
+        <div class="switchrow">
+          <p style="margin:0;">Use a code to open Pet Keeper on <b>this device</b></p>
+          <input id="lockToggle" type="checkbox" style="width:30px;height:30px;flex:none;">
+        </div>
+        <div id="lockSetup" class="hidden">
+          <label for="lockNew">Choose a code (numbers, 4 or more)</label>
+          <input id="lockNew" type="password" inputmode="numeric" autocomplete="off" maxlength="12">
+          <label for="lockNew2">Type it once more</label>
+          <input id="lockNew2" type="password" inputmode="numeric" autocomplete="off" maxlength="12">
+          <div id="lockSetMsg" class="msg"></div>
+          <p style="margin-top:12px;"><button class="btn" id="lockSaveBtn" type="button">Save my code</button></p>
+        </div>
+        <p class="small muted">The lock is off unless you turn it on. It only locks this device's screen — your pets are always safe in your account, and signing out always works.</p>
+        <h3>Account</h3>
+        <p><button class="btn secondary" id="setSignOutBtn" type="button">Sign out</button></p>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+"use strict";
+/* ================= Pet Keeper v1 spine =================
+   Account-first, always: the Supabase account copy is the truth.
+   This device keeps NO separate copy of the pet list, so an empty
+   screen can never overwrite a full account. Every add/edit/delete
+   below is one row, written straight to the account, then the list
+   is re-read from the account. Merge, never replace — per row.   */
+var SUPABASE_URL = "https://iuaibtdrcoxcrgihzfmi.supabase.co";
+var SUPABASE_KEY = "sb_publishable_O8GS4YTIuK3tEkkmdGoF_Q_EASb1cJh";
+var sb = null;
+var user = null;
+var pets = [];
+var records = [];
+var currentPetId = null;
+var editingPetId = null;
+var editingRecordId = null;
+var lockArmedThisLoad = false;
+
+function $(id){ return document.getElementById(id); }
+function esc(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+function toast(msg){
+  var t = $("toast"); t.textContent = msg; t.classList.add("show");
+  setTimeout(function(){ t.classList.remove("show"); }, 2600);
+}
+function showMsg(el, text, ok){
+  el.textContent = text;
+  el.className = "msg " + (ok ? "ok" : "err");
+  el.style.display = "block";
+}
+function hideMsg(el){ el.className = "msg"; el.style.display = "none"; el.textContent = ""; }
+function friendlyErr(e){
+  var m = (e && e.message) ? e.message : String(e || "Something went wrong.");
+  if (/Invalid login credentials/i.test(m)) return "That email and password didn't match. Check them and try again.";
+  if (/Email not confirmed/i.test(m)) return "Your email isn't confirmed yet — open the email we sent you, tap the link in it, then sign in here.";
+  if (/already registered/i.test(m)) return "That email already has an account. Tap \u201CSign in\u201D above and use your password.";
+  if (/at least 6 characters/i.test(m)) return "Passwords need at least 6 characters.";
+  if (/Failed to fetch|NetworkError/i.test(m)) return "Couldn't reach Pet Keeper just now — check your internet and try again.";
+  return m;
+}
+
+/* ---------- dates ---------- */
+function parseD(s){
+  if(!s) return null;
+  var p = String(s).slice(0,10).split("-");
+  if(p.length !== 3) return null;
+  var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+  return isNaN(d.getTime()) ? null : d;
+}
+function todayStart(){ var n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); }
+function diffDays(from, to){ return Math.round((to - from) / 86400000); }
+function fmtD(s){
+  var d = parseD(s); if(!d) return "";
+  return d.toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"});
+}
+function ageText(birthday){
+  var b = parseD(birthday); if(!b) return "";
+  var days = diffDays(b, todayStart()); if(days < 0) return "";
+  var years = Math.floor(days / 365.25);
+  var months = Math.floor((days - years * 365.25) / 30.44);
+  if(years >= 1) return years + (years === 1 ? " yr" : " yrs") + (months > 0 ? " " + months + " mo" : "");
+  if(months >= 1) return months + (months === 1 ? " mo" : " mos") + " old";
+  return days + (days === 1 ? " day" : " days") + " old";
+}
+function dueInfo(rec){
+  var d = parseD(rec.next_due); if(!d) return null;
+  var n = diffDays(todayStart(), d);
+  if(n < 0) return {n:n, cls:"overdue", label:(n === -1 ? "1 day overdue" : Math.abs(n) + " days overdue")};
+  if(n === 0) return {n:n, cls:"overdue", label:"Due today"};
+  if(n <= 30) return {n:n, cls:"soon", label:(n === 1 ? "Due tomorrow" : "Due in " + n + " days")};
+  return {n:n, cls:"later", label:"Due " + fmtD(rec.next_due)};
+}
+
+/* ---------- optional device lock (OFF by default) ---------- */
+function lockGet(){ try { return JSON.parse(localStorage.getItem("pk_lock") || "null"); } catch(e){ return null; } }
+function lockSet(v){
+  if(v) localStorage.setItem("pk_lock", JSON.stringify(v));
+  else localStorage.removeItem("pk_lock");
+}
+function hashCode(str){
+  // Convenience screen lock only (not account security): keep a digest, not the code.
+  var h = 5381;
+  for(var i = 0; i < str.length; i++){ h = ((h << 5) + h + str.charCodeAt(i)) >>> 0; }
+  return "h" + h.toString(36) + ":" + str.length;
+}
+function maybeLock(){
+  var lk = lockGet();
+  if(lk && lk.on && lk.hash && !lockArmedThisLoad){
+    lockArmedThisLoad = true;
+    $("appScreen").classList.add("hidden");
+    $("authScreen").classList.add("hidden");
+    $("lockScreen").classList.remove("hidden");
+    return true;
+  }
+  return false;
+}
+
+/* ---------- navigation ---------- */
+var VIEWS = ["view-home","view-pet","view-pet-form","view-record-form","view-summary","view-settings"];
+function showView(id){
+  VIEWS.forEach(function(v){ $(v).classList.toggle("hidden", v !== id); });
+  window.scrollTo(0,0);
+}
+
+/* ---------- data (account-first) ---------- */
+function loadAll(){
+  // The account copy loads first; the screen renders only from it.
+  return sb.from("pets").select("*").order("created_at", {ascending:true})
+  .then(function(r){
+    if(r.error) throw r.error;
+    pets = r.data || [];
+    return sb.from("records").select("*").order("next_due", {ascending:true, nullsFirst:false});
+  })
+  .then(function(r){
+    if(r.error) throw r.error;
+    records = r.data || [];
+    renderHome();
+  })
+  .catch(function(e){ toast(friendlyErr(e)); });
+}
+function petById(id){ for(var i = 0; i < pets.length; i++){ if(pets[i].id === id) return pets[i]; } return null; }
+function recsFor(petId){ return records.filter(function(r){ return r.pet_id === petId; }); }
+
+/* ---------- home ---------- */
+function renderHome(){
+  var grid = $("petGrid"); grid.innerHTML = "";
+  $("noPets").classList.toggle("hidden", pets.length > 0);
+  pets.forEach(function(p){
+    var div = document.createElement("div");
+    div.className = "petcard";
+    var face = p.species === "cat" ? "🐱" : "🐶";
+    var meta = [p.breed, ageText(p.birthday)].filter(Boolean).join(" · ");
+    div.innerHTML = '<div class="petface">' + face + '</div>' +
+      '<div class="petinitial">' + esc((p.name || "?").trim().charAt(0).toUpperCase()) + '</div>' +
+      '<div class="petname">' + esc(p.name) + '</div>' +
+      (meta ? '<div class="petmeta">' + esc(meta) + '</div>' : '');
+    div.addEventListener("click", function(){ openPet(p.id); });
+    grid.appendChild(div);
+  });
+  // Coming due strip — across all pets, overdue first, then soonest.
+  var dues = [];
+  records.forEach(function(r){
+    var info = dueInfo(r);
+    if(info && info.cls !== "later"){
+      var p = petById(r.pet_id);
+      dues.push({rec:r, info:info, pet:p});
+    }
+  });
+  dues.sort(function(a,b){ return a.info.n - b.info.n; });
+  var card = $("dueCard"), list = $("dueList");
+  if(!dues.length){ card.classList.add("hidden"); list.innerHTML = ""; }
+  else{
+    card.classList.remove("hidden");
+    list.innerHTML = "";
+    dues.slice(0,6).forEach(function(d){
+      var div = document.createElement("div");
+      div.className = "due " + d.info.cls;
+      div.innerHTML = "<b>" + esc(d.pet ? d.pet.name : "Pet") + "</b> — " + esc(d.rec.title) +
+        '<br><span class="pill ' + d.info.cls + '">' + esc(d.info.label) + "</span> " +
+        '<span class="muted">' + esc(fmtD(d.rec.next_due)) + "</span>";
+      div.style.cursor = "pointer";
+      div.addEventListener("click", function(){ if(d.pet) openPet(d.pet.id); });
+      list.appendChild(div);
+    });
+    if(dues.length > 6){
+      var more = document.createElement("p");
+      more.className = "muted small";
+      more.textContent = "…and " + (dues.length - 6) + " more coming due.";
+      list.appendChild(more);
+    }
+  }
+}
+
+/* ---------- pet detail ---------- */
+function openPet(id){
+  currentPetId = id;
+  renderPet();
+  showView("view-pet");
+}
+function kv(k, v){
+  if(!v) return "";
+  return '<div class="kv"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + '</div></div>';
+}
+function renderPet(){
+  var p = petById(currentPetId);
+  if(!p){ showView("view-home"); return; }
+  $("pdFace").textContent = p.species === "cat" ? "🐱" : "🐶";
+  $("pdName").textContent = p.name;
+  var meta = [p.species === "cat" ? "Cat" : "Dog", p.breed, ageText(p.birthday)].filter(Boolean).join(" · ");
+  $("pdMeta").textContent = meta;
+  $("pdBasics").innerHTML =
+    kv("Birthday", p.birthday ? fmtD(p.birthday) : "") +
+    kv("Weight", p.weight) +
+    kv("Food", p.food) +
+    kv("Allergies", p.allergies) +
+    kv("Notes & quirks", p.notes);
+  var vet = kv("Clinic", p.vet_clinic) + kv("Vet", p.vet_name) + kv("Phone", p.vet_phone);
+  if(p.vet_phone){
+    vet += '<p><a class="call" href="tel:' + esc(p.vet_phone.replace(/[^0-9+*#]/g, "")) + '">📞 Call the vet</a></p>';
+  }
+  $("pdVet").innerHTML = vet || '<p class="muted">No vet added yet — tap Edit pet to add one.</p>';
+  // Records grouped by kind
+  var mine = recsFor(p.id);
+  var groups = [["vaccination","💉 Vaccinations"],["medicine","💊 Medicines"],["other","📝 Other records"]];
+  var html = "";
+  if(!mine.length) html = '<p class="muted">No records yet. Add the first one below — a rabies shot, a monthly medicine, anything with a date.</p>';
+  groups.forEach(function(g){
+    var rs = mine.filter(function(r){ return (r.kind || "other") === g[0]; });
+    if(!rs.length) return;
+    html += "<h3>" + g[1] + "</h3>";
+    rs.forEach(function(r){
+      var info = dueInfo(r);
+      var dates = [];
+      if(r.date_given) dates.push("Given " + fmtD(r.date_given));
+      if(r.next_due) dates.push("Next due " + fmtD(r.next_due));
+      html += '<div class="rec" data-rec="' + r.id + '"><div><div class="rt">' + esc(r.title) + '</div>' +
+        (dates.length ? '<div class="rd">' + esc(dates.join(" · ")) + '</div>' : '') +
+        (r.notes ? '<div class="rd">' + esc(r.notes) + '</div>' : '') +
+        '</div>' + (info && info.cls !== "later" ? '<span class="pill ' + info.cls + '">' + esc(info.label) + '</span>' : '') + '</div>';
+    });
+  });
+  $("pdRecords").innerHTML = html;
+  Array.prototype.forEach.call($("pdRecords").querySelectorAll("[data-rec]"), function(el){
+    el.addEventListener("click", function(){ openRecordForm(el.getAttribute("data-rec")); });
+  });
+}
+
+/* ---------- summary (read-only, for vet / groomer / sitter) ---------- */
+function renderSummary(){
+  var p = petById(currentPetId);
+  if(!p){ showView("view-home"); return; }
+  var mine = recsFor(p.id);
+  var html = '<div class="center"><div class="petface">' + (p.species === "cat" ? "🐱" : "🐶") + '</div>' +
+    "<h1>" + esc(p.name) + "</h1>" +
+    '<p class="muted">' + esc([p.species === "cat" ? "Cat" : "Dog", p.breed, ageText(p.birthday)].filter(Boolean).join(" · ")) + "</p></div>";
+  html += kv("Birthday", p.birthday ? fmtD(p.birthday) : "") + kv("Weight", p.weight) +
+          kv("Food", p.food) + kv("Allergies", p.allergies) + kv("Notes & quirks", p.notes);
+  html += "<h3>🏥 Vet</h3>" + (kv("Clinic", p.vet_clinic) + kv("Vet", p.vet_name) + kv("Phone", p.vet_phone) ||
+          '<p class="muted">No vet on file.</p>');
+  html += "<h3>📋 Records</h3>";
+  if(!mine.length) html += '<p class="muted">No records on file.</p>';
+  mine.forEach(function(r){
+    var dates = [];
+    if(r.date_given) dates.push("Given " + fmtD(r.date_given));
+    if(r.next_due) dates.push("Next due " + fmtD(r.next_due));
+    html += '<div class="kv"><div class="k">' + esc(r.kind === "vaccination" ? "Vaccination" : (r.kind === "medicine" ? "Medicine" : "Other")) + '</div>' +
+      '<div class="v">' + esc(r.title) + (dates.length ? ' — <span class="muted">' + esc(dates.join(" · ")) + "</span>" : "") + "</div></div>";
+  });
+  $("summaryCard").innerHTML = html;
+  showView("view-summary");
+}
+
+/* ---------- pet form ---------- */
+function setSeg(segEl, attr, val){
+  Array.prototype.forEach.call(segEl.querySelectorAll("button"), function(b){
+    b.classList.toggle("on", b.getAttribute(attr) === val);
+  });
+}
+function segVal(segEl, attr){
+  var on = segEl.querySelector("button.on");
+  return on ? on.getAttribute(attr) : null;
+}
+function wireSeg(segEl, attr){
+  Array.prototype.forEach.call(segEl.querySelectorAll("button"), function(b){
+    b.addEventListener("click", function(){ setSeg(segEl, attr, b.getAttribute(attr)); });
+  });
+}
+function openPetForm(id){
+  editingPetId = id || null;
+  hideMsg($("pfMsg"));
+  var p = id ? petById(id) : null;
+  $("petFormTitle").textContent = p ? "Edit " + p.name : "Add a pet";
+  $("pfName").value = p ? (p.name || "") : "";
+  setSeg($("pfSpeciesSeg"), "data-sp", p ? (p.species || "dog") : "dog");
+  $("pfBreed").value = p ? (p.breed || "") : "";
+  $("pfBirthday").value = p ? (p.birthday || "") : "";
+  $("pfWeight").value = p ? (p.weight || "") : "";
+  $("pfVetClinic").value = p ? (p.vet_clinic || "") : "";
+  $("pfVetName").value = p ? (p.vet_name || "") : "";
+  $("pfVetPhone").value = p ? (p.vet_phone || "") : "";
+  $("pfFood").value = p ? (p.food || "") : "";
+  $("pfAllergies").value = p ? (p.allergies || "") : "";
+  $("pfNotes").value = p ? (p.notes || "") : "";
+  showView("view-pet-form");
+}
+function savePet(){
+  var name = $("pfName").value.trim();
+  if(!name){ showMsg($("pfMsg"), "Give your pet a name first."); return; }
+  var row = {
+    owner_id: user.id,
+    name: name,
+    species: segVal($("pfSpeciesSeg"), "data-sp") || "dog",
+    breed: $("pfBreed").value.trim() || null,
+    birthday: $("pfBirthday").value || null,
+    weight: $("pfWeight").value.trim() || null,
+    vet_clinic: $("pfVetClinic").value.trim() || null,
+    vet_name: $("pfVetName").value.trim() || null,
+    vet_phone: $("pfVetPhone").value.trim() || null,
+    food: $("pfFood").value.trim() || null,
+    allergies: $("pfAllergies").value.trim() || null,
+    notes: $("pfNotes").value.trim() || null,
+    updated_at: new Date().toISOString()
+  };
+  var btn = $("petSaveBtn"); btn.disabled = true; btn.textContent = "Saving…";
+  var done = function(){ btn.disabled = false; btn.textContent = "Save pet"; };
+  var q = editingPetId
+    ? sb.from("pets").update(row).eq("id", editingPetId)
+    : sb.from("pets").insert(row).select().single();
+  q.then(function(r){
+    done();
+    if(r.error){ showMsg($("pfMsg"), friendlyErr(r.error)); return; }
+    var savedId = editingPetId || (r.data && r.data.id);
+    // Saved to the account — now re-read the account copy and show it.
+    return loadAll().then(function(){
+      toast("Saved to your account ✓");
+      if(savedId) openPet(savedId); else showView("view-home");
+    });
+  }).catch(function(e){ done(); showMsg($("pfMsg"), friendlyErr(e)); });
+}
+function deletePet(){
+  var p = petById(currentPetId); if(!p) return;
+  if(!window.confirm("Remove " + p.name + " and all of " + p.name + "'s records? This can't be undone.")) return;
+  sb.from("pets").delete().eq("id", p.id).then(function(r){
+    if(r.error){ toast(friendlyErr(r.error)); return; }
+    currentPetId = null;
+    loadAll().then(function(){ toast("Removed."); showView("view-home"); });
+  });
+}
+
+/* ---------- record form ---------- */
+function openRecordForm(recId){
+  editingRecordId = recId || null;
+  hideMsg($("rfMsg"));
+  var r = null;
+  if(recId){ for(var i = 0; i < records.length; i++){ if(records[i].id === recId) r = records[i]; } }
+  $("recFormTitle").textContent = r ? "Edit record" : "Add a record";
+  setSeg($("rfKindSeg"), "data-kind", r ? (r.kind || "vaccination") : "vaccination");
+  $("rfTitle").value = r ? (r.title || "") : "";
+  $("rfDateGiven").value = r ? (r.date_given || "") : "";
+  $("rfNextDue").value = r ? (r.next_due || "") : "";
+  $("rfNotes").value = r ? (r.notes || "") : "";
+  $("recDeleteWrap").classList.toggle("hidden", !r);
+  showView("view-record-form");
+}
+function saveRecord(){
+  var title = $("rfTitle").value.trim();
+  if(!title){ showMsg($("rfMsg"), "Give the record a name first — like \u201CRabies shot\u201D."); return; }
+  if(!currentPetId){ showMsg($("rfMsg"), "Pick a pet first."); return; }
+  var row = {
+    owner_id: user.id,
+    pet_id: currentPetId,
+    kind: segVal($("rfKindSeg"), "data-kind") || "other",
+    title: title,
+    date_given: $("rfDateGiven").value || null,
+    next_due: $("rfNextDue").value || null,
+    notes: $("rfNotes").value.trim() || null
+  };
+  var btn = $("recSaveBtn"); btn.disabled = true; btn.textContent = "Saving…";
+  var done = function(){ btn.disabled = false; btn.textContent = "Save record"; };
+  var q = editingRecordId
+    ? sb.from("records").update(row).eq("id", editingRecordId)
+    : sb.from("records").insert(row);
+  q.then(function(r){
+    done();
+    if(r.error){ showMsg($("rfMsg"), friendlyErr(r.error)); return; }
+    return loadAll().then(function(){
+      toast("Saved to your account ✓");
+      renderPet();
+      showView("view-pet");
+    });
+  }).catch(function(e){ done(); showMsg($("rfMsg"), friendlyErr(e)); });
+}
+function deleteRecord(){
+  if(!editingRecordId) return;
+  if(!window.confirm("Remove this record? This can't be undone.")) return;
+  sb.from("records").delete().eq("id", editingRecordId).then(function(r){
+    if(r.error){ toast(friendlyErr(r.error)); return; }
+    loadAll().then(function(){ toast("Removed."); renderPet(); showView("view-pet"); });
+  });
+}
+
+/* ---------- auth ---------- */
+function enterApp(){
+  $("whoLine").textContent = user && user.email ? user.email : "";
+  $("setEmail").textContent = user && user.email ? user.email : "—";
+  $("authScreen").classList.add("hidden");
+  if(maybeLock()) return;
+  $("appScreen").classList.remove("hidden");
+  showView("view-home");
+  loadAll();
+}
+function showAuth(){
+  user = null; pets = []; records = []; currentPetId = null;
+  $("appScreen").classList.add("hidden");
+  $("lockScreen").classList.add("hidden");
+  $("authScreen").classList.remove("hidden");
+}
+function signIn(){
+  var email = $("siEmail").value.trim(), pass = $("siPass").value;
+  var msg = $("siMsg"); hideMsg(msg);
+  if(!email || !pass){ showMsg(msg, "Type your email and your password."); return; }
+  var btn = $("signInBtn"); btn.disabled = true; btn.textContent = "Signing in…";
+  sb.auth.signInWithPassword({email:email, password:pass}).then(function(r){
+    btn.disabled = false; btn.textContent = "Sign in";
+    if(r.error){ showMsg(msg, friendlyErr(r.error)); return; }
+    user = r.data.user;
+    enterApp();
+  }).catch(function(e){ btn.disabled = false; btn.textContent = "Sign in"; showMsg(msg, friendlyErr(e)); });
+}
+function createAccount(){
+  var email = $("nuEmail").value.trim(), p1 = $("nuPass").value, p2 = $("nuPass2").value;
+  var msg = $("nuMsg"); hideMsg(msg);
+  if(!email){ showMsg(msg, "Type your email."); return; }
+  if(p1.length < 6){ showMsg(msg, "Passwords need at least 6 characters."); return; }
+  if(p1 !== p2){ showMsg(msg, "The two passwords don't match. Type the same one twice."); return; }
+  var btn = $("createBtn"); btn.disabled = true; btn.textContent = "Creating…";
+  sb.auth.signUp({email:email, password:p1}).then(function(r){
+    btn.disabled = false; btn.textContent = "Create my account";
+    if(r.error){ showMsg(msg, friendlyErr(r.error)); return; }
+    if(r.data && r.data.session && r.data.user){
+      user = r.data.user;
+      toast("Account made — welcome to Pet Keeper! 🐾");
+      enterApp();
+    } else {
+      // Email confirmation is on for this project: be plain about the one tap left.
+      showMsg(msg, "Your account is made! We just sent a confirmation email to " + email + " — tap the link in it, then come back here and Sign in with the password you just created.", true);
+      $("tabSignIn").click();
+      $("siEmail").value = email;
+    }
+  }).catch(function(e){ btn.disabled = false; btn.textContent = "Create my account"; showMsg(msg, friendlyErr(e)); });
+}
+function forgotPassword(){
+  var email = $("siEmail").value.trim();
+  var msg = $("siMsg"); hideMsg(msg);
+  if(!email){ showMsg(msg, "Type your email above first, then tap this again."); return; }
+  sb.auth.resetPasswordForEmail(email, {redirectTo: window.location.href}).then(function(r){
+    if(r.error){ showMsg(msg, friendlyErr(r.error)); return; }
+    showMsg(msg, "Check your email — we sent a link to set a new password.", true);
+  }).catch(function(e){ showMsg(msg, friendlyErr(e)); });
+}
+function signOut(){
+  sb.auth.signOut().then(function(){ lockArmedThisLoad = false; showAuth(); });
+}
+
+/* ---------- wire up ---------- */
+function init(){
+  if(!window.supabase){
+    document.body.innerHTML = '<div class="wrap"><div class="card"><h1>Pet Keeper couldn\'t load</h1><p>Check your internet connection and refresh the page.</p></div></div>';
+    return;
+  }
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  wireSeg($("pfSpeciesSeg"), "data-sp");
+  wireSeg($("rfKindSeg"), "data-kind");
+  $("tabSignIn").addEventListener("click", function(){
+    $("tabSignIn").classList.add("on"); $("tabNew").classList.remove("on");
+    $("signInPane").classList.remove("hidden"); $("newPane").classList.add("hidden");
+  });
+  $("tabNew").addEventListener("click", function(){
+    $("tabNew").classList.add("on"); $("tabSignIn").classList.remove("on");
+    $("newPane").classList.remove("hidden"); $("signInPane").classList.add("hidden");
+  });
+  $("signInBtn").addEventListener("click", signIn);
+  $("createBtn").addEventListener("click", createAccount);
+  $("forgotBtn").addEventListener("click", forgotPassword);
+  $("siPass").addEventListener("keydown", function(e){ if(e.key === "Enter") signIn(); });
+  $("nuPass2").addEventListener("keydown", function(e){ if(e.key === "Enter") createAccount(); });
+  $("signOutBtn").addEventListener("click", signOut);
+  $("setSignOutBtn").addEventListener("click", signOut);
+  $("settingsBtn").addEventListener("click", function(){
+    var lk = lockGet();
+    $("lockToggle").checked = !!(lk && lk.on);
+    $("lockSetup").classList.add("hidden");
+    showView("view-settings");
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-back]"), function(b){
+    b.addEventListener("click", function(){ showView("view-home"); });
+  });
+  $("addPetBtn").addEventListener("click", function(){ openPetForm(null); });
+  $("petFormBack").addEventListener("click", function(){
+    if(editingPetId){ openPet(editingPetId); } else { showView("view-home"); }
+  });
+  $("petSaveBtn").addEventListener("click", savePet);
+  $("pdEditBtn").addEventListener("click", function(){ openPetForm(currentPetId); });
+  $("pdSummaryBtn").addEventListener("click", renderSummary);
+  $("pdDeleteBtn").addEventListener("click", deletePet);
+  $("pdAddRecBtn").addEventListener("click", function(){ openRecordForm(null); });
+  $("recFormBack").addEventListener("click", function(){ renderPet(); showView("view-pet"); });
+  $("recSaveBtn").addEventListener("click", saveRecord);
+  $("recDeleteBtn").addEventListener("click", deleteRecord);
+  $("sumBack").addEventListener("click", function(){ renderPet(); showView("view-pet"); });
+  $("sumPrintBtn").addEventListener("click", function(){ window.print(); });
+  // settings: optional lock
+  $("lockToggle").addEventListener("change", function(){
+    if($("lockToggle").checked){
+      $("lockSetup").classList.remove("hidden");
+    } else {
+      lockSet(null);
+      $("lockSetup").classList.add("hidden");
+      toast("Screen lock off.");
+    }
+  });
+  $("lockSaveBtn").addEventListener("click", function(){
+    var a = $("lockNew").value.trim(), b = $("lockNew2").value.trim();
+    var msg = $("lockSetMsg"); hideMsg(msg);
+    if(a.length < 4){ showMsg(msg, "Make your code at least 4 numbers."); return; }
+    if(a !== b){ showMsg(msg, "The two codes don't match. Type the same one twice."); return; }
+    lockSet({on:true, hash:hashCode(a)});
+    $("lockNew").value = ""; $("lockNew2").value = "";
+    $("lockSetup").classList.add("hidden");
+    showMsg(msg, "Screen lock is on for this device.", true);
+    toast("Screen lock on 🔒");
+  });
+  // lock screen
+  $("lockOpenBtn").addEventListener("click", tryUnlock);
+  $("lockCode").addEventListener("keydown", function(e){ if(e.key === "Enter") tryUnlock(); });
+  $("lockSignOutBtn").addEventListener("click", signOut);
+  // session: persisted by supabase-js on this device
+  sb.auth.getSession().then(function(r){
+    var session = r.data && r.data.session;
+    if(session && session.user){ user = session.user; enterApp(); }
+    else showAuth();
+  });
+  sb.auth.onAuthStateChange(function(event, session){
+    if(event === "SIGNED_OUT"){ showAuth(); }
+    else if(session && session.user && !user){ user = session.user; enterApp(); }
+  });
+}
+function tryUnlock(){
+  var lk = lockGet();
+  var code = $("lockCode").value.trim();
+  if(lk && lk.hash && hashCode(code) === lk.hash){
+    $("lockScreen").classList.add("hidden");
+    $("lockCode").value = "";
+    hideMsg($("lockMsg"));
+    $("appScreen").classList.remove("hidden");
+    showView("view-home");
+    loadAll();
+  } else {
+    showMsg($("lockMsg"), "That code didn't match. Try again.");
+  }
+}
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
