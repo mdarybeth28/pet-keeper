@@ -376,6 +376,23 @@
         <p class="small muted">The lock is off unless you turn it on. It only locks this device's screen — your pets are always safe in your account, and signing out always works.</p>
         <h3>Account</h3>
         <p><button class="btn secondary" id="setSignOutBtn" type="button">Sign out</button></p>
+        <p class="center small"><a href="privacy.html" target="_blank" rel="noopener">Privacy — what Pet Keeper keeps, in plain words</a></p>
+        <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:6px;">
+          <h3 style="color:var(--warn);">Delete my account</h3>
+          <p class="small muted">If you want to leave Pet Keeper for good, you can delete your account right here. Mary does not have to do it for you.</p>
+          <div id="delStep1">
+            <p><button class="btn danger" id="delStartBtn" type="button">Delete my account</button></p>
+          </div>
+          <div id="delStep2" class="hidden">
+            <p><b>This deletes your pets, records and account for good. It can't be undone.</b></p>
+            <p class="small muted">One important thing: deleting your account does <b>not</b> by itself cancel a paid subscription. To stop being charged, cancel the subscription too — open the receipt Stripe emailed you when you joined and tap the cancel / manage link in it, or tap 💬 Tell Mary above and Mary will help you cancel. If you delete the account first, keep that receipt email — it is the easiest way to reach the cancel page afterwards.</p>
+            <label for="delConfirmEmail">Type your email to be sure</label>
+            <input id="delConfirmEmail" type="email" autocomplete="off" placeholder="you@example.com">
+            <div id="delMsg" class="msg"></div>
+            <p style="margin-top:12px;"><button class="btn danger" id="delDoBtn" type="button" disabled>Yes, delete everything</button></p>
+            <p class="center"><button class="iconbtn" id="delCancelBtn" type="button">Keep my account</button></p>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -387,7 +404,17 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 "use strict";
-/* ================= Pet Keeper v4.2 - pay-only build + read-my-receipt door =================
+/* ================= Pet Keeper v4.3-draft - privacy page + delete-my-account door =================
+   v4.3-draft (2026-11-09, NOT yet live) adds, for the app-store
+   road: a standalone privacy page (privacy.html, linked from
+   Settings) and a "Delete my account" door in Settings. Deleting
+   is two steps on purpose - the first button only opens a warning,
+   and the real delete button stays off until the person types
+   their own sign-in email. The call goes to the new delete-account
+   Edge Function (JWT ON), which deletes ONLY the caller's own
+   account and rows for real - no hiding. The warning says plainly
+   that deleting does not cancel a paid subscription by itself.
+   Everything below the v4.2 note is unchanged.
    v4.2 (2026-11-09) adds the 📸 Read a vet receipt door on the pet
    page: the signed-in person picks a photo of a vet receipt, the
    read-receipt Edge Function reads it (Gemini - the key lives only
@@ -1254,6 +1281,57 @@ function signOut(){
   sb.auth.signOut().then(function(){ lockArmedThisLoad = false; showAuth(); });
 }
 
+/* ---------- delete my account (v4.3 door) ----------
+   Two steps on purpose: the Settings button only OPENS the
+   warning; deleting takes a second, separate button that stays
+   disabled until the person types their own sign-in email. The
+   button alone never deletes anything. The call goes to the
+   delete-account Edge Function, which checks the caller's own
+   login and deletes ONLY that account (pets, records and the
+   sign-in itself). Nothing is hidden-and-kept: the function
+   really deletes. If deleting fails, the account is left exactly
+   as it was and the person is told so, with the 💬 Tell Mary door
+   as the fallback. */
+function openDeleteStep(){
+  $("delStep1").classList.add("hidden");
+  $("delStep2").classList.remove("hidden");
+  $("delConfirmEmail").value = "";
+  $("delDoBtn").disabled = true;
+  hideMsg($("delMsg"));
+}
+function closeDeleteStep(){
+  $("delStep2").classList.add("hidden");
+  $("delStep1").classList.remove("hidden");
+  $("delConfirmEmail").value = "";
+}
+function deleteMyAccount(){
+  var btn = $("delDoBtn"), msg = $("delMsg");
+  if(!user){ return; }
+  var typed = $("delConfirmEmail").value.trim().toLowerCase();
+  if(typed !== String(user.email || "").toLowerCase()){
+    showMsg(msg, "That email doesn't match the one you're signed in with, so nothing was deleted.");
+    return;
+  }
+  btn.disabled = true; btn.textContent = "Deleting…";
+  hideMsg(msg);
+  sb.functions.invoke("delete-account", {body: {}})
+  .then(function(r){
+    if(r.error) throw r.error;
+    if(r.data && r.data.error) throw new Error(r.data.error);
+    lockSet(null);
+    try { localStorage.removeItem("pk_lock"); } catch(e){}
+    return sb.auth.signOut().then(function(){
+      user = null; pets = []; records = [];
+      showAuth();
+      toast("Your account and pets are deleted. Thank you for keeping them with us 🐾");
+    });
+  })
+  .catch(function(e){
+    btn.disabled = false; btn.textContent = "Yes, delete everything";
+    showMsg(msg, "Deleting didn't finish — your account is still here, nothing was removed. Try once more, or tap 💬 Tell Mary above and Mary will delete it for you. (" + friendlyErr(e) + ")");
+  });
+}
+
 /* ---------- owner office (owners only) ----------
    Everything here runs on the owner_overview RPC (counts only -
    the owner never browses anybody else's pet pages) and the
@@ -1382,10 +1460,18 @@ function init(){
   $("payMonthlyBtn").addEventListener("click", function(){ openPay("monthly"); });
   $("payYearlyBtn").addEventListener("click", function(){ openPay("yearly"); });
   $("setSignOutBtn").addEventListener("click", signOut);
+  $("delStartBtn").addEventListener("click", openDeleteStep);
+  $("delCancelBtn").addEventListener("click", closeDeleteStep);
+  $("delDoBtn").addEventListener("click", deleteMyAccount);
+  $("delConfirmEmail").addEventListener("input", function(){
+    var want = user ? String(user.email || "").toLowerCase() : "";
+    $("delDoBtn").disabled = !(want && $("delConfirmEmail").value.trim().toLowerCase() === want);
+  });
   $("settingsBtn").addEventListener("click", function(){
     var lk = lockGet();
     $("lockToggle").checked = !!(lk && lk.on);
     $("lockSetup").classList.add("hidden");
+    closeDeleteStep();
     showView("view-settings");
   });
   Array.prototype.forEach.call(document.querySelectorAll("[data-back]"), function(b){
