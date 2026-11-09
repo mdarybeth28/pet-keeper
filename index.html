@@ -75,6 +75,7 @@
   .orow .om{font-size:.88rem;color:var(--muted);}
   .orow .obtns{display:flex;gap:8px;flex-wrap:wrap;}
   .orow .obtns .btn{width:auto;padding:11px 16px;min-height:48px;font-size:1rem;}
+  .orow .obtns .btn.smallbtn{padding:7px 12px;min-height:38px;font-size:.88rem;}
   .pill{display:inline-block;font-size:.78rem;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;}
   .pill.overdue{background:var(--warn);color:#fff;}
   .pill.soon{background:#e7c65a;color:#4d3d05;}
@@ -1018,7 +1019,7 @@ function paintOffice(){
       '<div class="om">' + (p.is_owner ? "Owner account — always in" : "Can sign in and use Pet Keeper") + '</div></div>';
     if(!p.is_owner){
       var btns = document.createElement("div"); btns.className = "obtns";
-      var rb = document.createElement("button"); rb.className = "btn danger"; rb.type = "button"; rb.textContent = "Remove access";
+      var rb = document.createElement("button"); rb.className = "btn danger smallbtn"; rb.type = "button"; rb.textContent = "Remove access";
       rb.addEventListener("click", function(){ officeDecide("remove", p.email); });
       btns.appendChild(rb); div.appendChild(btns);
     }
@@ -1038,6 +1039,9 @@ function paintOffice(){
   });
 }
 function officeDecide(kind, email){
+  if(kind === "remove"){
+    if(!window.confirm("Remove " + email + "? They will be locked out of Pet Keeper right away. This does not cancel their payment plan.")) return;
+  }
   if(kind === "remove" && ownerEmail(email)){
     toast("That one's an owner account — it stays.");
     return;
