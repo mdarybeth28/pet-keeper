@@ -248,7 +248,11 @@
         <h2>Records</h2>
         <div id="pdRecords"></div>
         <p style="margin-top:12px;"><button class="btn" id="pdAddRecBtn" type="button">➕ Add a record</button></p>
+        <p><button class="btn secondary" id="pdReadReceiptBtn" type="button">📸 Read a vet receipt</button></p>
+        <input id="receiptFile" type="file" accept="image/*" class="hidden">
+        <div id="receiptArea"></div>
         <p class="small muted">A record is anything with a date: a vaccination, a medicine, a checkup. You type the name and the dates — Pet Keeper just keeps them and reminds you what's coming due.</p>
+        <p class="small muted">Got the vet's paper receipt? Tap 📸 Read a vet receipt, pick a photo of it, and Pet Keeper reads out the shots, the date and the vet — then shows you everything to check before anything is saved.</p>
       </div>
       <div class="card">
         <button class="btn danger" id="pdDeleteBtn" type="button">Remove this pet</button>
@@ -383,7 +387,17 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 "use strict";
-/* ================= Pet Keeper v4 - pay-only build =================
+/* ================= Pet Keeper v4.2 - pay-only build + read-my-receipt door =================
+   v4.2 (2026-11-09) adds the 📸 Read a vet receipt door on the pet
+   page: the signed-in person picks a photo of a vet receipt, the
+   read-receipt Edge Function reads it (Gemini - the key lives only
+   in that function, never in this page), and the app shows a REVIEW
+   card first. Nothing from a read is ever filed until the person
+   checks it and taps Save - review-before-save, same rule as
+   everywhere else Mary builds. If a read can't be made out, the
+   person can send the photo itself to Mary with one tap (the
+   help-photos bucket + help_photos table + send-help-photo
+   function) - the photo is sent ONLY on that tap, never on its own.
    v4 (2026-11-08, Mary's call after Tiffany's knock: "No it's all
    pay now") removes the waiting room's Request access door: nobody
    knocks for a hand approval anymore - the only public way in is the
@@ -426,6 +440,7 @@ var editingPetId = null;
 var editingRecordId = null;
 var lockArmedThisLoad = false;
 var OWNER_EMAILS = ["marybeth.davis28@gmail.com", "affiliatefindstools@gmail.com"];
+var receiptState = null; /* {blob, mime, read} for the receipt door - this device only, never the account */
 var approvalState = "unknown"; /* approved | waiting | open (setup not run yet - old behavior) */
 var gateSetupMissing = false;
 var requestOnFile = false;
@@ -603,6 +618,7 @@ function kv(k, v){
 function renderPet(){
   var p = petById(currentPetId);
   if(!p){ showView("view-home"); return; }
+  clearReceipt();
   $("pdFace").textContent = p.species === "cat" ? "🐱" : "🐶";
   $("pdName").textContent = p.name;
   var meta = [p.species === "cat" ? "Cat" : "Dog", p.breed, ageText(p.birthday)].filter(Boolean).join(" · ");
@@ -796,6 +812,285 @@ function deleteRecord(){
     if(r.error){ toast(friendlyErr(r.error)); return; }
     loadAll().then(function(){ toast("Removed."); renderPet(); showView("view-pet"); });
   });
+}
+
+/* ---------- read a vet receipt (the 📸 door) ----------
+   Pick a photo -> shrink it here on the device -> the read-receipt
+   function reads it -> a REVIEW card shows what it found. Nothing
+   is saved until the person checks the card and taps Save. If the
+   read fails or comes back empty, the card offers to send the
+   photo itself to Mary instead - only ever on that tap. */
+function clearReceipt(){
+  receiptState = null;
+  var area = $("receiptArea");
+  if(area) area.innerHTML = "";
+  var f = $("receiptFile");
+  if(f) f.value = "";
+}
+function receiptPrepPhoto(file){
+  // Shrink to a 1600px long edge, JPEG 0.85 - a smaller photo uploads
+  // faster and reads just as well. Any trouble at all here just sends
+  // the original photo: getting ready can never block the read.
+  return new Promise(function(resolve){
+    try {
+      if(!file || !file.size){ resolve(file); return; }
+      var done = function(b){ resolve(b || file); };
+      var draw = function(src, w, h, close){
+        try {
+          var cap = 1600;
+          var longEdge = Math.max(w, h);
+          var type = String(file.type || "").toLowerCase();
+          if(longEdge <= cap && (type === "image/jpeg" || type === "image/png") && file.size <= 1258291){ if(close) close(); done(file); return; }
+          var scale = longEdge > cap ? cap / longEdge : 1;
+          var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+          var c = document.createElement("canvas"); c.width = cw; c.height = ch;
+          var ctx = c.getContext && c.getContext("2d");
+          if(!ctx){ if(close) close(); done(file); return; }
+          ctx.drawImage(src, 0, 0, cw, ch);
+          if(close) close();
+          if(c.toBlob){ c.toBlob(function(b){ done(b); }, "image/jpeg", 0.85); } else { done(file); }
+        } catch(e){ done(file); }
+      };
+      if(typeof createImageBitmap === "function"){
+        createImageBitmap(file).then(function(bmp){
+          draw(bmp, bmp.width || 0, bmp.height || 0, function(){ try { if(bmp.close) bmp.close(); } catch(e){} });
+        }).catch(function(){ decodeWithImg(); });
+      } else { decodeWithImg(); }
+      function decodeWithImg(){
+        try {
+          var url = URL.createObjectURL(file);
+          var img = new Image();
+          img.onload = function(){ draw(img, img.naturalWidth || img.width || 0, img.naturalHeight || img.height || 0, function(){ try { URL.revokeObjectURL(url); } catch(e){} }); };
+          img.onerror = function(){ try { URL.revokeObjectURL(url); } catch(e){} done(file); };
+          img.src = url;
+        } catch(e){ done(file); }
+      }
+    } catch(e){ resolve(file); }
+  });
+}
+function receiptBlobToB64(blob){
+  return new Promise(function(resolve){
+    try {
+      var fr = new FileReader();
+      fr.onload = function(){
+        var s = String(fr.result || "");
+        var i = s.indexOf(",");
+        resolve(i >= 0 ? s.slice(i + 1) : s);
+      };
+      fr.onerror = function(){ resolve(""); };
+      fr.readAsDataURL(blob);
+    } catch(e){ resolve(""); }
+  });
+}
+function receiptReadIsEmpty(rd){
+  if(!rd) return true;
+  var items = Array.isArray(rd.items) ? rd.items : [];
+  return !items.length && !rd.vet_clinic && !rd.vet_name && !rd.vet_phone && !rd.total;
+}
+function readReceiptPhoto(file){
+  if(!file || !currentPetId) return;
+  var area = $("receiptArea");
+  receiptState = null;
+  area.innerHTML = '<p class="muted" id="rcStatus">Reading your receipt…</p>';
+  receiptPrepPhoto(file).then(function(blob){
+    var mime = (blob && blob.type) || file.type || "image/jpeg";
+    receiptState = {blob: blob, mime: mime, read: null};
+    return receiptBlobToB64(blob).then(function(b64){
+      if(!b64) throw new Error("That photo could not be opened.");
+      return sb.functions.invoke("read-receipt", {body: {image_base64: b64, mime_type: mime}});
+    });
+  }).then(function(inv){
+    if(inv && inv.error) throw inv.error;
+    var rd = inv && inv.data;
+    if(receiptReadIsEmpty(rd)){ renderReceiptFallback(); return; }
+    receiptState.read = rd;
+    renderReceiptReview(rd);
+  }).catch(function(e){
+    console.error("Receipt read failed", e);
+    renderReceiptFallback();
+  });
+}
+function receiptUnsureHas(rd, names){
+  var u = (rd && Array.isArray(rd.unsure)) ? rd.unsure : [];
+  for(var i = 0; i < names.length; i++){ if(u.indexOf(names[i]) >= 0) return true; }
+  return false;
+}
+function receiptNameKey(s){ return String(s || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim(); }
+function receiptVetFill(p, rd){
+  // The vet fields from the read that this pet is still missing.
+  var fill = {};
+  if(rd.vet_clinic && !p.vet_clinic) fill.vet_clinic = rd.vet_clinic;
+  if(rd.vet_name && !p.vet_name) fill.vet_name = rd.vet_name;
+  if(rd.vet_phone && !p.vet_phone) fill.vet_phone = rd.vet_phone;
+  return fill;
+}
+function renderReceiptReview(rd){
+  var p = petById(currentPetId);
+  if(!p) return;
+  var area = $("receiptArea");
+  var html = '<div class="card" id="rcReview" style="background:var(--green-soft);border-color:#bcd8c4;">' +
+    "<h3>📸 Here's what I read — check it over</h3>";
+  if(rd.pet_name && receiptNameKey(rd.pet_name) !== receiptNameKey(p.name)){
+    html += '<p id="rcMismatch" style="background:var(--amber-soft);border:1.5px solid #eadfae;border-radius:12px;padding:10px 12px;">This receipt looks like it\'s for ' +
+      esc(rd.pet_name) + " — you're filing it under " + esc(p.name) + ".</p>";
+  }
+  if(receiptUnsureHas(rd, ["pet_name"])){
+    html += '<p class="small rc-unsure">⚠ check this one — the pet\'s name on the paper wasn\'t clear.</p>';
+  }
+  var fill = receiptVetFill(p, rd);
+  var hasVet = !!(rd.vet_clinic || rd.vet_name || rd.vet_phone);
+  if(hasVet && Object.keys(fill).length){
+    var bits = [fill.vet_clinic || rd.vet_clinic, fill.vet_phone || rd.vet_phone].filter(Boolean).join(" · ");
+    html += '<label style="display:flex;gap:10px;align-items:flex-start;font-weight:600;">' +
+      '<input type="checkbox" id="rcVetChk" checked style="width:26px;height:26px;flex:none;margin-top:2px;">' +
+      "<span>Also save the vet on " + esc(p.name) + "'s page: " + esc(bits) + "</span></label>";
+    if(receiptUnsureHas(rd, ["vet_clinic", "vet_name", "vet_phone"])){
+      html += '<p class="small rc-unsure">⚠ check this one — the vet part of the paper wasn\'t clear.</p>';
+    }
+  }
+  var anyItemUnsure = receiptUnsureHas(rd, ["items", "title", "date_given", "next_due"]);
+  var kindOpts = function(k){
+    return '<option value="vaccination"' + (k === "vaccination" ? " selected" : "") + '>💉 Vaccination</option>' +
+           '<option value="medicine"' + (k === "medicine" ? " selected" : "") + '>💊 Medicine</option>' +
+           '<option value="other"' + (k === "other" ? " selected" : "") + '>📝 Other</option>';
+  };
+  var rowsHtml = "";
+  var items = Array.isArray(rd.items) ? rd.items : [];
+  var allRows = items.map(function(it){
+    return {kind: it.kind || "other", title: it.title || "", date_given: it.date_given || "", next_due: it.next_due || "", notes: ""};
+  });
+  if(rd.total){
+    allRows.push({kind: "other", title: "Vet visit total", date_given: "", next_due: "", notes: "$" + rd.total});
+  }
+  allRows.forEach(function(r){
+    rowsHtml += '<div class="rc-row" data-notes="' + esc(r.notes) + '" style="border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0;background:#fff;">' +
+      '<label style="margin-top:2px;">What kind?</label><select class="rc-kind">' + kindOpts(r.kind) + "</select>" +
+      '<label>Name</label><input type="text" class="rc-title" value="' + esc(r.title) + '">' +
+      '<label>Date given</label><input type="date" class="rc-given" value="' + esc(r.date_given) + '">' +
+      '<label>Next due</label><input type="date" class="rc-due" value="' + esc(r.next_due) + '">' +
+      (r.notes ? '<p class="small muted" style="margin:8px 0 0;">' + esc(r.notes) + "</p>" : "") +
+      (anyItemUnsure ? '<p class="small rc-unsure">⚠ check this one</p>' : "") +
+      (rd.total && r.title === "Vet visit total" && receiptUnsureHas(rd, ["total"]) ? '<p class="small rc-unsure">⚠ check this one — the total wasn\'t clear.</p>' : "") +
+      '<p style="margin:10px 0 2px;"><button class="iconbtn rc-rm" type="button">Take this one off</button></p></div>';
+  });
+  html += '<div id="rcRows">' + rowsHtml + "</div>";
+  html += '<div id="rcMsg" class="msg"></div>' +
+    '<div class="btnrow"><button class="btn" id="rcSaveBtn" type="button">Save these records</button>' +
+    '<button class="btn secondary" id="rcCancelBtn" type="button">Never mind</button></div>' +
+    '<p class="center" style="margin-top:12px;"><button class="iconbtn" id="rcSendLink" type="button">Photo still doesn\'t look right? Send it to Mary</button></p>' +
+    "</div>";
+  area.innerHTML = html;
+  Array.prototype.forEach.call(area.querySelectorAll(".rc-rm"), function(b){
+    b.addEventListener("click", function(){
+      var row = b.closest ? b.closest(".rc-row") : null;
+      if(row && row.parentNode) row.parentNode.removeChild(row);
+    });
+  });
+  $("rcSaveBtn").addEventListener("click", saveReceiptReview);
+  $("rcCancelBtn").addEventListener("click", clearReceipt);
+  $("rcSendLink").addEventListener("click", renderReceiptFallback);
+}
+function saveReceiptReview(){
+  var p = petById(currentPetId);
+  if(!p || !receiptState || !receiptState.read) return;
+  var msg = $("rcMsg"); hideMsg(msg);
+  var rows = [];
+  Array.prototype.forEach.call(document.querySelectorAll("#rcRows .rc-row"), function(el){
+    var title = el.querySelector(".rc-title").value.trim();
+    if(!title) return;
+    rows.push({
+      owner_id: user.id,
+      pet_id: currentPetId,
+      kind: el.querySelector(".rc-kind").value || "other",
+      title: title,
+      date_given: el.querySelector(".rc-given").value || null,
+      next_due: el.querySelector(".rc-due").value || null,
+      notes: el.getAttribute("data-notes") || null
+    });
+  });
+  var chk = $("rcVetChk");
+  var fill = (chk && chk.checked) ? receiptVetFill(p, receiptState.read) : {};
+  var btn = $("rcSaveBtn"); btn.disabled = true; btn.textContent = "Saving…";
+  var step = Promise.resolve({error: null});
+  if(Object.keys(fill).length){
+    // Only the fields this pet is missing - a filled field is never overwritten.
+    var upd = {}; for(var k in fill) upd[k] = fill[k];
+    upd.updated_at = new Date().toISOString();
+    step = sb.from("pets").update(upd).eq("id", currentPetId);
+  }
+  step.then(function(r){
+    if(r && r.error) throw r.error;
+    if(!rows.length) return {error: null};
+    return sb.from("records").insert(rows);
+  }).then(function(r){
+    if(r && r.error) throw r.error;
+    return loadAll();
+  }).then(function(){
+    toast("Saved to your account ✓");
+    renderPet();
+    showView("view-pet");
+  }).catch(function(e){
+    btn.disabled = false; btn.textContent = "Save these records";
+    showMsg(msg, "Those records didn't save. They're still written above — try again in a moment.");
+    console.error("Receipt review save failed", e);
+  });
+}
+/* ---------- the "send it to Mary" fallback ----------
+   The photo goes up ONLY when the person taps the send button
+   below - never on its own. It lands in the private help-photos
+   bucket under the sender's own folder, one row lands in the
+   help_photos table, then send-help-photo emails Mary a link
+   that works for 7 days. */
+function renderReceiptFallback(){
+  var area = $("receiptArea");
+  area.innerHTML = '<div class="card" id="rcFallback" style="background:var(--amber-soft);border-color:#eadfae;">' +
+    "<h3>I couldn't read that one clearly.</h3>" +
+    "<p>That happens with crumpled or faded receipts — it's not you. Send the photo to Mary and she'll read it with her own eyes.</p>" +
+    '<label for="rcNote">A note for Mary (only if you want)</label>' +
+    '<textarea id="rcNote" maxlength="1000" placeholder="Anything she should know about this one…"></textarea>' +
+    '<div id="rcSendMsg" class="msg"></div>' +
+    '<p style="margin-top:12px;"><button class="btn" id="rcSendBtn" type="button">📩 Send this photo to Mary</button></p>' +
+    '<p class="center"><button class="iconbtn" id="rcGiveUpBtn" type="button">Never mind</button></p></div>';
+  $("rcSendBtn").addEventListener("click", sendReceiptToMary);
+  $("rcGiveUpBtn").addEventListener("click", clearReceipt);
+}
+function sendReceiptToMary(){
+  var msg = $("rcSendMsg"); hideMsg(msg);
+  var p = petById(currentPetId);
+  if(!receiptState || !receiptState.blob){
+    showMsg(msg, "That photo isn't in hand anymore — pick it once more, then tap send.");
+    return;
+  }
+  var note = $("rcNote") ? $("rcNote").value.trim() : "";
+  var petName = p ? p.name : "";
+  var email = user && user.email ? String(user.email).toLowerCase() : null;
+  var path = user.id + "/" + Date.now() + ".jpg";
+  var btn = $("rcSendBtn"); btn.disabled = true; btn.textContent = "Sending…";
+  var fail = function(e){
+    btn.disabled = false; btn.textContent = "📩 Send this photo to Mary";
+    console.error("Send photo to Mary failed", e);
+    showMsg(msg, "That didn't send. Your photo is still right here — try again in a moment.");
+  };
+  var up;
+  try {
+    up = sb.storage.from("help-photos").upload(path, receiptState.blob, {contentType: receiptState.mime || "image/jpeg"});
+  } catch(e){ fail(e); return; }
+  Promise.resolve(up).then(function(r){
+    if(r && r.error) throw r.error;
+    return sb.from("help_photos").insert({
+      user_id: user.id, user_email: email, pet_name: petName,
+      note: note || null, photo_path: path
+    });
+  }).then(function(r){
+    if(r && r.error) throw r.error;
+    return sb.functions.invoke("send-help-photo", {body: {
+      photo_path: path, pet_name: petName, note: note, user_email: email
+    }});
+  }).then(function(inv){
+    if(inv && inv.error) throw inv.error;
+    toast("Sent to Mary 💚 She'll take a look.");
+    clearReceipt();
+  }).catch(fail);
 }
 
 /* ---------- auth ---------- */
@@ -1105,6 +1400,11 @@ function init(){
   $("pdSummaryBtn").addEventListener("click", renderSummary);
   $("pdDeleteBtn").addEventListener("click", deletePet);
   $("pdAddRecBtn").addEventListener("click", function(){ openRecordForm(null); });
+  $("pdReadReceiptBtn").addEventListener("click", function(){ $("receiptFile").click(); });
+  $("receiptFile").addEventListener("change", function(){
+    var f = $("receiptFile").files && $("receiptFile").files[0];
+    if(f) readReceiptPhoto(f);
+  });
   $("recFormBack").addEventListener("click", function(){ renderPet(); showView("view-pet"); });
   $("recSaveBtn").addEventListener("click", saveRecord);
   $("recDeleteBtn").addEventListener("click", deleteRecord);
