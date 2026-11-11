@@ -345,6 +345,11 @@
         <div id="officeApproved"></div>
       </div>
       <div class="card">
+        <h2>👣 Visits</h2>
+        <div id="officeVisits"><p class="muted">Loading…</p></div>
+        <p class="small muted">Every time the Pet Keeper page is opened, one visit is counted — with the door it came through (like ?from=pinterest), never anything about who it was.</p>
+      </div>
+      <div class="card">
         <h2>👀 Who's here</h2>
         <div id="officePeople"></div>
         <p class="small muted">Counts only — you can see how many pets somebody keeps here, never what's inside their pages. Their pets stay theirs.</p>
@@ -404,7 +409,17 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 "use strict";
-/* ================= Pet Keeper v4.3-draft - privacy page + delete-my-account door =================
+/* ================= Pet Keeper - visit counter (2026-11-11) =================
+   Adds a quiet visit counter, the same idea as the tracker's: on
+   page load ONE row lands in the page_visits table (the ?from= door
+   tag + the page path - never an IP address, never anything that
+   names the visitor), and the Office gains a "Visits" card that
+   only an owner can see. The counting itself lives in the visits
+   SQL (page_visits + get_visit_counts); the card reads it through
+   that owner-checked RPC. If the setup has not been run yet, the
+   beacon and the card simply stay quiet - nothing else changes.
+   Everything below this note is the v4.3 build, untouched.
+   ================= Pet Keeper v4.3-draft - privacy page + delete-my-account door =================
    v4.3-draft (2026-11-09, NOT yet live) adds, for the app-store
    road: a standalone privacy page (privacy.html, linked from
    Settings) and a "Delete my account" door in Settings. Deleting
@@ -1354,6 +1369,7 @@ function renderOffice(){
   $("officeRequests").innerHTML = '<p class="muted">Loading…</p>';
   $("officeApproved").innerHTML = '<p class="muted">Loading…</p>';
   $("officePeople").innerHTML = '<p class="muted">Loading…</p>';
+  renderOfficeVisits();
   sb.rpc("owner_overview").then(function(r){
     if(r && r.error) throw r.error;
     officePeople = (r && r.data) || [];
@@ -1409,6 +1425,30 @@ function paintOffice(){
       '<div class="om">' + esc(status) + " · " + Number(p.pet_count || 0) + (Number(p.pet_count) === 1 ? " pet" : " pets") +
       " · " + Number(p.record_count || 0) + (Number(p.record_count) === 1 ? " record" : " records") + esc(seen) + '</div></div>';
     wp.appendChild(div);
+  });
+}
+/* ---------- visit counts (owner only - the RPC checks too) ---------- */
+function renderOfficeVisits(){
+  var box = $("officeVisits");
+  if(!box) return;
+  if(!sb){ box.innerHTML = '<p class="muted">Nothing here yet.</p>'; return; }
+  sb.rpc("get_visit_counts").then(function(r){
+    if(r && r.error) throw r.error;
+    var d = (r && r.data) || {};
+    var html = '<div class="kv"><div class="k">All visits so far</div><div class="v">' + Number(d.total || 0) + '</div></div>' +
+      '<div class="kv"><div class="k">Today</div><div class="v">' + Number(d.today || 0) + '</div></div>' +
+      '<div class="kv"><div class="k">Last 7 days</div><div class="v">' + Number(d.last7 || 0) + '</div></div>';
+    var src = Array.isArray(d.sources) ? d.sources : [];
+    if(src.length){
+      html += '<h3>Where they came from</h3>' + src.map(function(s){
+        return '<div class="kv"><div class="k">' + esc(s.source === "no tag" ? "No tag (typed the address, or a link with no tag)" : s.source) + '</div><div class="v">' + Number(s.count || 0) + (Number(s.count) === 1 ? " visit" : " visits") + '</div></div>';
+      }).join("");
+    } else {
+      html += '<p class="muted">No visits counted yet.</p>';
+    }
+    box.innerHTML = html;
+  }).catch(function(e){
+    box.innerHTML = '<p class="muted">Visit counts could not load — the visits setup may still need running.</p>';
   });
 }
 function officeDecide(kind, email){
@@ -1546,6 +1586,31 @@ function tryUnlock(){
     showMsg($("lockMsg"), "That code didn't match. Try again.");
   }
 }
+/* ---------- visit beacon: ONE quiet count per page load ----------
+   Sends only the ?from= door tag + the page path to the page_visits
+   table in Pet Keeper's own Supabase project. No IP address, no
+   browser details, nothing that names the visitor. Fire-and-forget:
+   wrapped so a failure can never slow or break the page, and it
+   uses the page's own publishable key (the same one the app uses). */
+(function(){
+  try {
+    var from = null;
+    try { from = new URLSearchParams(window.location.search).get("from"); } catch (e) {}
+    if (from) { from = String(from).slice(0, 60); if (!from) from = null; }
+    var path = "/"; try { path = window.location.pathname || "/"; } catch (e) {}
+    fetch(SUPABASE_URL + "/rest/v1/page_visits", {
+      method: "POST",
+      keepalive: true,
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": "Bearer " + SUPABASE_KEY,
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal"
+      },
+      body: JSON.stringify({ source: from, path: path })
+    }).catch(function(){});
+  } catch (e) {}
+})();
 document.addEventListener("DOMContentLoaded", init);
 </script>
 </body>
