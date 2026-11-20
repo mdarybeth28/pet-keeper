@@ -166,6 +166,14 @@
   </div>
 </div>
 
+<!-- ============ SITTER SHARE (public, view-only) ============ -->
+<div id="sitterScreen" class="hidden">
+  <div class="wrap">
+    <div class="card" id="sitterCard"><p class="muted">Loading…</p></div>
+    <p class="center small muted">Shared with you from <b>Pet Keeper</b> 🐾 — a view-only page for the sitter.</p>
+  </div>
+</div>
+
 <!-- ============ WAITING ROOM (signed in, not approved yet) ============ -->
 <div id="waitScreen" class="hidden">
   <div class="wrap">
@@ -257,6 +265,14 @@
         <div id="receiptArea"></div>
         <p class="small muted">A record is anything with a date: a vaccination, a medicine, a checkup. You type the name and the dates — Pet Keeper just keeps them and reminds you what's coming due.</p>
         <p class="small muted">Got the vet's paper receipt? Tap 📸 Read a vet receipt, pick a photo of it, and Pet Keeper reads out the shots, the date and the vet — then shows you everything to check before anything is saved.</p>
+      </div>
+      <div class="card">
+        <h2>🧑‍🤝‍🧑 Share with a sitter</h2>
+        <p class="small muted">Going out of town? Write what the sitter needs, make the link, and send it to them. They see this one pet's care page — no account, no sign-in, and they can't change anything.</p>
+        <label for="pdSitterNotes">Notes for the sitter</label>
+        <textarea id="pdSitterNotes" rows="3" placeholder="Feeds twice a day, morning and evening. Medicine with breakfast. Anything the sitter should know…"></textarea>
+        <p><button class="btn secondary" id="pdSitterNotesSave" type="button">Save sitter notes</button></p>
+        <div id="pdShareArea"></div>
       </div>
       <div class="card">
         <button class="btn danger" id="pdDeleteBtn" type="button">Remove this pet</button>
@@ -719,6 +735,7 @@ function renderPet(){
   Array.prototype.forEach.call($("pdRecords").querySelectorAll("[data-rec]"), function(el){
     el.addEventListener("click", function(){ openRecordForm(el.getAttribute("data-rec")); });
   });
+  renderShareArea(p);
 }
 
 /* ---------- summary (read-only, for vet / groomer / sitter) ---------- */
@@ -1562,6 +1579,9 @@ function init(){
     return;
   }
   sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  var sitterTok = null;
+  try { sitterTok = new URLSearchParams(window.location.search).get("sitter"); } catch (e) {}
+  if (sitterTok) { renderSitterPage(sitterTok); return; }
   wireSeg($("pfSpeciesSeg"), "data-sp");
   wireSeg($("rfKindSeg"), "data-kind");
   $("tabSignIn").addEventListener("click", function(){
@@ -1683,6 +1703,108 @@ function tryUnlock(){
     showMsg($("lockMsg"), "That code didn't match. Try again.");
   }
 }
+
+/* ---------- sitter share (view-only link, Michael Martin's idea) ---------- */
+function makeShareToken(){
+  var a = new Uint8Array(24);
+  (window.crypto || window.msCrypto).getRandomValues(a);
+  return Array.prototype.map.call(a, function(b){ return ("0" + b.toString(16)).slice(-2); }).join("");
+}
+function setShareToken(p, tok){
+  sb.from("pets").update({ share_token: tok }).eq("id", p.id).then(function(r){
+    if (r.error) { toast("That didn't save — try again in a minute."); return; }
+    p.share_token = tok;
+    renderShareArea(p);
+    toast(tok ? "Sitter link is live ✓" : "Sharing is off — that link is dead now.");
+  });
+}
+function copySitterLink(){
+  var inp = $("pdShareLink");
+  if (!inp) return;
+  var done = function(){ toast("Link copied ✓ — send it to your sitter."); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(inp.value).then(done, function(){ inp.select(); try { document.execCommand("copy"); } catch (e) {} done(); });
+  } else { inp.select(); try { document.execCommand("copy"); } catch (e) {} done(); }
+}
+function renderShareArea(p){
+  var ta = $("pdSitterNotes");
+  if (ta) ta.value = p.sitter_notes || "";
+  var sv = $("pdSitterNotesSave");
+  if (sv) sv.onclick = function(){
+    var v = $("pdSitterNotes").value.trim() || null;
+    sb.from("pets").update({ sitter_notes: v }).eq("id", p.id).then(function(r){
+      if (r.error) { toast("Couldn't save the sitter notes — try again."); return; }
+      p.sitter_notes = v;
+      toast("Sitter notes saved ✓");
+    });
+  };
+  var area = $("pdShareArea");
+  if (!area) return;
+  if (p.share_token) {
+    var link = location.origin + location.pathname + "?sitter=" + p.share_token;
+    area.innerHTML = '<label>Your sitter link — anybody with it can see this one page, and nothing else</label>' +
+      '<input id="pdShareLink" readonly value="' + esc(link) + '">' +
+      '<div class="btnrow"><button class="btn" id="pdShareCopy" type="button">📋 Copy the link</button>' +
+      '<button class="btn plain" id="pdShareNew" type="button">Make a new link</button>' +
+      '<button class="btn plain" id="pdShareOff" type="button">Turn off sharing</button></div>' +
+      '<p class="small muted">Making a new link, or turning sharing off, kills the old link right away.</p>';
+    $("pdShareCopy").addEventListener("click", copySitterLink);
+    $("pdShareNew").addEventListener("click", function(){ setShareToken(p, makeShareToken()); });
+    $("pdShareOff").addEventListener("click", function(){ setShareToken(p, null); });
+  } else {
+    area.innerHTML = '<p><button class="btn" id="pdShareMake" type="button">🔗 Make my sitter link</button></p>' +
+      '<p class="small muted">The link opens one view-only page: this pet’s photo, food, medicines, vet, and your sitter notes. No sign-in for the sitter, and they can’t change a thing.</p>';
+    $("pdShareMake").addEventListener("click", function(){ setShareToken(p, makeShareToken()); });
+  }
+}
+function renderSitterPage(tok){
+  ["authScreen", "waitScreen", "appScreen", "lockScreen"].forEach(function(id){
+    var e = $(id); if (e) e.classList.add("hidden");
+  });
+  var scr = $("sitterScreen");
+  if (scr) scr.classList.remove("hidden");
+  sb.rpc("sitter_pet", { tok: tok }).then(function(r){
+    var card = $("sitterCard");
+    if (!card) return;
+    if (r.error || !r.data || !r.data.pet) {
+      card.innerHTML = "<h1>This link isn't live</h1><p>The sitter link may have been turned off or replaced with a new one. Ask the pet's owner for a fresh link.</p>";
+      return;
+    }
+    var p = r.data.pet, recs = r.data.records || [];
+    var html = '<div class="center"><div class="petface">' + petFaceHtml(p, "petphoto") + '</div>' +
+      "<h1>" + esc(p.name) + "</h1>" +
+      '<p class="muted">' + esc([p.species === "cat" ? "Cat" : "Dog", p.breed, ageText(p.birthday)].filter(Boolean).join(" · ")) + "</p></div>";
+    if (p.sitter_notes) html += "<h3>📝 Notes for the sitter</h3><p style=\"white-space:pre-wrap\">" + esc(p.sitter_notes) + "</p>";
+    html += kv("Birthday", p.birthday ? fmtD(p.birthday) : "") + kv("Weight", p.weight) + kv("Microchip #", p.chip_number) +
+            kv("Food", p.food) + kv("Allergies", p.allergies) + kv("Notes & quirks", p.notes);
+    html += "<h3>🏥 Vet</h3>" + (kv("Clinic", p.vet_clinic) + kv("Vet", p.vet_name) + kv("Phone", p.vet_phone) ||
+            '<p class="muted">No vet on file.</p>');
+    if (p.vet_phone) html += '<p><a class="call" href="tel:' + esc(p.vet_phone.replace(/[^0-9+*#]/g, "")) + '">📞 Call the vet</a></p>';
+    var meds = recs.filter(function(x){ return (x.kind || "other") === "medicine"; });
+    if (meds.length) {
+      html += "<h3>💊 Medicines</h3>";
+      meds.forEach(function(x){
+        var d = [];
+        if (x.date_given) d.push("Given " + fmtD(x.date_given));
+        if (x.next_due) d.push("Next due " + fmtD(x.next_due));
+        html += '<div class="kv"><div class="k">Medicine</div><div class="v">' + esc(x.title) +
+          (d.length ? ' — <span class="muted">' + esc(d.join(" · ")) + "</span>" : "") +
+          (x.notes ? "<br>" + esc(x.notes) : "") + "</div></div>";
+      });
+    }
+    html += "<h3>📋 Records</h3>";
+    if (!recs.length) html += '<p class="muted">No records on file.</p>';
+    recs.forEach(function(x){
+      var d = [];
+      if (x.date_given) d.push("Given " + fmtD(x.date_given));
+      if (x.next_due) d.push("Next due " + fmtD(x.next_due));
+      html += '<div class="kv"><div class="k">' + esc(x.kind === "vaccination" ? "Vaccination" : (x.kind === "medicine" ? "Medicine" : "Other")) + '</div>' +
+        '<div class="v">' + esc(x.title) + (d.length ? ' — <span class="muted">' + esc(d.join(" · ")) + "</span>" : "") + "</div></div>";
+    });
+    card.innerHTML = html;
+  });
+}
+
 /* ---------- visit beacon: ONE quiet count per page load ----------
    Sends only the ?from= door tag + the page path to the page_visits
    table in Pet Keeper's own Supabase project. No IP address, no
