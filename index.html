@@ -57,6 +57,9 @@
        text-align:center;cursor:pointer;box-shadow:0 1px 3px rgba(60,50,20,.06);}
   .petcard:active{border-color:var(--green);}
   .petface{font-size:3rem;line-height:1.1;}
+  .petphoto{width:104px;height:104px;border-radius:50%;object-fit:cover;border:3px solid var(--green-soft);}
+  .petphoto-sm{width:64px;height:64px;border-radius:50%;object-fit:cover;margin:2px auto 4px;display:block;}
+  .pfphoto{width:104px;height:104px;border-radius:50%;object-fit:cover;border:3px solid var(--green-soft);display:block;margin:6px 0;}
   .petinitial{width:64px;height:64px;margin:2px auto 4px;border-radius:50%;background:var(--green-soft);
        color:var(--green-dark);font-size:1.9rem;font-weight:800;display:flex;align-items:center;justify-content:center;}
   .petname{font-size:1.15rem;font-weight:800;margin-top:6px;word-break:break-word;}
@@ -272,12 +275,24 @@
           <button type="button" data-sp="dog" class="on">🐶 Dog</button>
           <button type="button" data-sp="cat">🐱 Cat</button>
         </div>
+        <label>Picture of your pet</label>
+        <div>
+          <img id="pfPhotoImg" class="pfphoto hidden" alt="Your pet's picture">
+          <div id="pfPhotoFace" class="petface">🐶</div>
+          <p style="margin:8px 0;">
+            <button class="btn" id="pfPhotoBtn" type="button">📸 Add a picture</button>
+            <button class="iconbtn hidden" id="pfPhotoRemove" type="button">Take it off</button>
+          </p>
+          <input id="pfPhotoFile" type="file" accept="image/*" class="hidden">
+        </div>
         <label for="pfBreed">Breed</label>
         <input id="pfBreed" type="text" placeholder="Beagle, tabby, mixed…">
         <label for="pfBirthday">Birthday (or best guess)</label>
         <input id="pfBirthday" type="date">
         <label for="pfWeight">Weight</label>
         <input id="pfWeight" type="text" placeholder="12 lb">
+        <label for="pfChip">Microchip number <span class="muted">(if they have one)</span></label>
+        <input id="pfChip" type="text" placeholder="From the vet paperwork or chip tag">
         <h3>🏥 Vet</h3>
         <label for="pfVetClinic">Vet clinic</label>
         <input id="pfVetClinic" type="text" placeholder="Happy Paws Animal Clinic">
@@ -607,8 +622,10 @@ function renderHome(){
     div.className = "petcard";
     var face = p.species === "cat" ? "🐱" : "🐶";
     var meta = [p.breed, ageText(p.birthday)].filter(Boolean).join(" · ");
-    div.innerHTML = '<div class="petface">' + face + '</div>' +
-      '<div class="petinitial">' + esc((p.name || "?").trim().charAt(0).toUpperCase()) + '</div>' +
+    div.innerHTML = (p.photo_url
+        ? '<img class="petphoto-sm" src="' + esc(p.photo_url) + '" alt="">'
+        : '<div class="petface">' + face + '</div>' +
+          '<div class="petinitial">' + esc((p.name || "?").trim().charAt(0).toUpperCase()) + '</div>') +
       '<div class="petname">' + esc(p.name) + '</div>' +
       (meta ? '<div class="petmeta">' + esc(meta) + '</div>' : '');
     div.addEventListener("click", function(){ openPet(p.id); });
@@ -662,13 +679,14 @@ function renderPet(){
   var p = petById(currentPetId);
   if(!p){ showView("view-home"); return; }
   clearReceipt();
-  $("pdFace").textContent = p.species === "cat" ? "🐱" : "🐶";
+  $("pdFace").innerHTML = petFaceHtml(p, "petphoto");
   $("pdName").textContent = p.name;
   var meta = [p.species === "cat" ? "Cat" : "Dog", p.breed, ageText(p.birthday)].filter(Boolean).join(" · ");
   $("pdMeta").textContent = meta;
   $("pdBasics").innerHTML =
     kv("Birthday", p.birthday ? fmtD(p.birthday) : "") +
     kv("Weight", p.weight) +
+    kv("Microchip #", p.chip_number) +
     kv("Food", p.food) +
     kv("Allergies", p.allergies) +
     kv("Notes & quirks", p.notes);
@@ -708,10 +726,10 @@ function renderSummary(){
   var p = petById(currentPetId);
   if(!p){ showView("view-home"); return; }
   var mine = recsFor(p.id);
-  var html = '<div class="center"><div class="petface">' + (p.species === "cat" ? "🐱" : "🐶") + '</div>' +
+  var html = '<div class="center"><div class="petface">' + petFaceHtml(p, "petphoto") + '</div>' +
     "<h1>" + esc(p.name) + "</h1>" +
     '<p class="muted">' + esc([p.species === "cat" ? "Cat" : "Dog", p.breed, ageText(p.birthday)].filter(Boolean).join(" · ")) + "</p></div>";
-  html += kv("Birthday", p.birthday ? fmtD(p.birthday) : "") + kv("Weight", p.weight) +
+  html += kv("Birthday", p.birthday ? fmtD(p.birthday) : "") + kv("Weight", p.weight) + kv("Microchip #", p.chip_number) +
           kv("Food", p.food) + kv("Allergies", p.allergies) + kv("Notes & quirks", p.notes);
   html += "<h3>🏥 Vet</h3>" + (kv("Clinic", p.vet_clinic) + kv("Vet", p.vet_name) + kv("Phone", p.vet_phone) ||
           '<p class="muted">No vet on file.</p>');
@@ -743,6 +761,69 @@ function wireSeg(segEl, attr){
     b.addEventListener("click", function(){ setSeg(segEl, attr, b.getAttribute(attr)); });
   });
 }
+/* ---------- pet picture ----------
+   Pick a photo in the pet form -> shrunk on the device by the same
+   helper the receipt reader uses -> uploaded to the pet-photos
+   bucket when the pet saves -> the public link lives on the pet row
+   (photo_url). The pet itself always saves first: a picture problem
+   can never block saving the pet. */
+var petPhotoState = null;
+function petFaceHtml(p, cls){
+  if(p && p.photo_url) return '<img class="' + cls + '" src="' + esc(p.photo_url) + '" alt="">';
+  return esc(p && p.species === "cat" ? "🐱" : "🐶");
+}
+function resetPetPhoto(p){
+  petPhotoState = {blob:null, mime:"", removed:false, url:(p && p.photo_url) || ""};
+  paintPetPhoto();
+}
+function paintPetPhoto(){
+  var img = $("pfPhotoImg"), face = $("pfPhotoFace"), rm = $("pfPhotoRemove"), btn = $("pfPhotoBtn");
+  if(!img || !petPhotoState) return;
+  var src = "";
+  if(petPhotoState.blob) src = URL.createObjectURL(petPhotoState.blob);
+  else if(!petPhotoState.removed && petPhotoState.url) src = petPhotoState.url;
+  if(src){ img.src = src; img.classList.remove("hidden"); face.classList.add("hidden"); }
+  else {
+    img.removeAttribute("src"); img.classList.add("hidden"); face.classList.remove("hidden");
+    face.textContent = (segVal($("pfSpeciesSeg"), "data-sp") === "cat") ? "🐱" : "🐶";
+  }
+  rm.classList.toggle("hidden", !src);
+  btn.textContent = src ? "📸 Change the picture" : "📸 Add a picture";
+}
+function pickPetPhoto(file){
+  if(!file) return;
+  receiptPrepPhoto(file).then(function(blob){
+    if(!petPhotoState) return;
+    petPhotoState.blob = blob || file;
+    petPhotoState.mime = (blob && blob.type) || file.type || "image/jpeg";
+    petPhotoState.removed = false;
+    paintPetPhoto();
+  });
+}
+function savePetPhoto(petId){
+  // Runs after the pet row saved. Never rejects.
+  if(!petId || !petPhotoState) return Promise.resolve(true);
+  var path = user.id + "/" + petId + ".jpg";
+  if(petPhotoState.blob){
+    return sb.storage.from("pet-photos").upload(path, petPhotoState.blob, {contentType: petPhotoState.mime || "image/jpeg", upsert:true})
+      .then(function(up){
+        if(up.error) throw up.error;
+        var pub = sb.storage.from("pet-photos").getPublicUrl(path);
+        var url = pub && pub.data && pub.data.publicUrl;
+        if(!url) throw new Error("no url");
+        return sb.from("pets").update({photo_url: url}).eq("id", petId);
+      })
+      .then(function(r){ if(r && r.error) throw r.error; return true; })
+      .catch(function(e){ console.error("Pet photo save failed", e); return false; });
+  }
+  if(petPhotoState.removed && petPhotoState.url){
+    try { sb.storage.from("pet-photos").remove([path]); } catch(e){}
+    return sb.from("pets").update({photo_url: null}).eq("id", petId)
+      .then(function(r){ return !(r && r.error); })
+      .catch(function(){ return false; });
+  }
+  return Promise.resolve(true);
+}
 function openPetForm(id){
   editingPetId = id || null;
   hideMsg($("pfMsg"));
@@ -753,12 +834,14 @@ function openPetForm(id){
   $("pfBreed").value = p ? (p.breed || "") : "";
   $("pfBirthday").value = p ? (p.birthday || "") : "";
   $("pfWeight").value = p ? (p.weight || "") : "";
+  $("pfChip").value = p ? (p.chip_number || "") : "";
   $("pfVetClinic").value = p ? (p.vet_clinic || "") : "";
   $("pfVetName").value = p ? (p.vet_name || "") : "";
   $("pfVetPhone").value = p ? (p.vet_phone || "") : "";
   $("pfFood").value = p ? (p.food || "") : "";
   $("pfAllergies").value = p ? (p.allergies || "") : "";
   $("pfNotes").value = p ? (p.notes || "") : "";
+  resetPetPhoto(p);
   showView("view-pet-form");
 }
 function savePet(){
@@ -771,6 +854,7 @@ function savePet(){
     breed: $("pfBreed").value.trim() || null,
     birthday: $("pfBirthday").value || null,
     weight: $("pfWeight").value.trim() || null,
+    chip_number: $("pfChip").value.trim() || null,
     vet_clinic: $("pfVetClinic").value.trim() || null,
     vet_name: $("pfVetName").value.trim() || null,
     vet_phone: $("pfVetPhone").value.trim() || null,
@@ -788,10 +872,13 @@ function savePet(){
     done();
     if(r.error){ showMsg($("pfMsg"), friendlyErr(r.error)); return; }
     var savedId = editingPetId || (r.data && r.data.id);
-    // Saved to the account — now re-read the account copy and show it.
-    return loadAll().then(function(){
-      toast("Saved to your account ✓");
-      if(savedId) openPet(savedId); else showView("view-home");
+    // Saved to the account — now the picture (it can never block the pet),
+    // then re-read the account copy and show it.
+    return savePetPhoto(savedId).then(function(photoOk){
+      return loadAll().then(function(){
+        toast(photoOk ? "Saved to your account ✓" : "Pet saved ✓ — the picture didn't go up; try it again in Edit pet.");
+        if(savedId) openPet(savedId); else showView("view-home");
+      });
     });
   }).catch(function(e){ done(); showMsg($("pfMsg"), friendlyErr(e)); });
 }
@@ -1523,6 +1610,15 @@ function init(){
     if(editingPetId){ openPet(editingPetId); } else { showView("view-home"); }
   });
   $("petSaveBtn").addEventListener("click", savePet);
+  $("pfPhotoBtn").addEventListener("click", function(){ $("pfPhotoFile").click(); });
+  $("pfPhotoFile").addEventListener("change", function(){
+    var f = $("pfPhotoFile").files && $("pfPhotoFile").files[0];
+    if(f) pickPetPhoto(f);
+    $("pfPhotoFile").value = "";
+  });
+  $("pfPhotoRemove").addEventListener("click", function(){
+    if(petPhotoState){ petPhotoState.blob = null; petPhotoState.removed = true; paintPetPhoto(); }
+  });
   $("pdEditBtn").addEventListener("click", function(){ openPetForm(currentPetId); });
   $("pdSummaryBtn").addEventListener("click", renderSummary);
   $("pdDeleteBtn").addEventListener("click", deletePet);
