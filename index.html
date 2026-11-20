@@ -133,6 +133,13 @@
       <p class="muted">Every pet, every shot, every vet visit —<br>all in one place, on every device you use.</p>
     </div>
     <div class="card">
+      <h2>Join Pet Keeper</h2>
+      <p>Pet Keeper is <b>$3.99/month</b> or <b>$29.99/year</b> — that's the whole deal, no surprises after you sign up. Paying lets you in by itself: check out with the email you'll sign in with, then come back here and sign in (or make your account with that same email) and you'll walk right in.</p>
+      <p><button class="btn" id="frontPayMonthlyBtn" type="button">Join monthly — $3.99/month</button></p>
+      <p><button class="btn secondary" id="frontPayYearlyBtn" type="button">Join yearly — $29.99/year (save a chunk)</button></p>
+      <p class="small muted">Already a member? Just sign in below.</p>
+    </div>
+    <div class="card">
       <div class="tabs">
         <button id="tabSignIn" class="on" type="button">Sign in</button>
         <button id="tabNew" type="button">I'm new here</button>
@@ -1606,6 +1613,8 @@ function init(){
   $("fbSendBtn").addEventListener("click", sendFeedback);
   $("fbCancelBtn").addEventListener("click", closeFeedback);
   $("payMonthlyBtn").addEventListener("click", function(){ openPay("monthly"); });
+  $("frontPayMonthlyBtn").addEventListener("click", function(){ openPay("monthly"); });
+  $("frontPayYearlyBtn").addEventListener("click", function(){ openPay("yearly"); });
   $("payYearlyBtn").addEventListener("click", function(){ openPay("yearly"); });
   $("setSignOutBtn").addEventListener("click", signOut);
   $("delStartBtn").addEventListener("click", openDeleteStep);
