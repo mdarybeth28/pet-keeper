@@ -129,6 +129,10 @@
   <div class="wrap">
     <div class="center" style="margin-top:26px;">
       <div class="big-emoji">🐾</div>
+      <div style="background:#111827;color:#fff;border-radius:12px;padding:12px 14px;margin:0 auto 14px;max-width:520px;">
+        <p style="margin:0;font-weight:800;font-size:1.15rem;">🖤 BLACK FRIDAY SALE</p>
+        <p style="margin:4px 0 0;">Pet Keeper is <b>$21.99 for the year</b> (was $29.99) or <b>$2.99/month</b> (was $3.99) — now through early Monday!</p>
+      </div>
       <h1>Pet Keeper</h1>
       <p class="muted">Every pet, every shot, every vet visit —<br>all in one place, on every device you use.</p>
     </div>
@@ -152,9 +156,9 @@
     </div>
     <div class="card">
       <h2>Join Pet Keeper</h2>
-      <p>Pet Keeper is <b>$3.99/month</b> or <b>$29.99/year</b> — that's the whole deal, no surprises after you sign up. Paying lets you in by itself: check out with the email you'll sign in with, then come back here and sign in (or make your account with that same email) and you'll walk right in.</p>
-      <p><button class="btn" id="frontPayMonthlyBtn" type="button">Join monthly — $3.99/month</button></p>
-      <p><button class="btn secondary" id="frontPayYearlyBtn" type="button">Join yearly — $29.99/year (save a chunk)</button></p>
+      <p>🖤 <b>Black Friday sale — ends early Monday:</b> Pet Keeper is <b>$2.99/month</b> (was $3.99) or <b>$21.99/year</b> (was $29.99) — that's the whole deal, no surprises after you sign up. Paying lets you in by itself: check out with the email you'll sign in with, then come back here and sign in (or make your account with that same email) and you'll walk right in.</p>
+      <p><button class="btn" id="frontPayMonthlyBtn" type="button">Join monthly — $2.99/month (Black Friday)</button></p>
+      <p><button class="btn secondary" id="frontPayYearlyBtn" type="button">Join yearly — $21.99/year (Black Friday — save a chunk)</button></p>
       <p class="small muted">Already a member? Just sign in below.</p>
     </div>
     <div class="card">
@@ -211,8 +215,8 @@
       <p>Pet Keeper is a small, hand-run place, and every account is private — your pet pages are yours alone.</p>
       <p id="waitStatus" class="muted">Join below and Pet Keeper lets you in automatically, as soon as your payment finishes. Use the same email here and at checkout — then come back here and sign in (or refresh) and you'll walk right in.</p>
       <div id="waitMsg" class="msg"></div>
-      <p><button class="btn" id="payMonthlyBtn" type="button">Join monthly — $3.99/month</button></p>
-      <p><button class="btn secondary" id="payYearlyBtn" type="button">Join yearly — $29.99/year (save a chunk)</button></p>
+      <p><button class="btn" id="payMonthlyBtn" type="button">Join monthly — $2.99/month (Black Friday)</button></p>
+      <p><button class="btn secondary" id="payYearlyBtn" type="button">Join yearly — $21.99/year (Black Friday — save a chunk)</button></p>
       <div id="payMsg" class="msg"></div>
       <p class="small muted">Emily and family are already in — new friends join here.</p>
       <p><button class="btn plain" id="waitFeedbackBtn" type="button">💬 Tell Mary</button></p>
@@ -528,8 +532,8 @@ var SUPABASE_KEY = "sb_publishable_O8GS4YTIuK3tEkkmdGoF_Q_EASb1cJh";
 /* Stripe payment links go here once they exist (sell build). Until a
    constant holds a real link, its button shows a friendly "almost
    ready" note instead of sending anybody anywhere. */
-const PAY_MONTHLY_URL = "https://buy.stripe.com/aFacN5dsG8uX5dz0xB0ZW03";
-const PAY_YEARLY_URL = "https://buy.stripe.com/9B68wP3S68uXaxTeor0ZW02";
+const PAY_MONTHLY_URL = "https://buy.stripe.com/aFaaEXgES8uX9tPdkn0ZW08";
+const PAY_YEARLY_URL = "https://buy.stripe.com/cNicN53S68uXeO99470ZW07";
 var sb = null;
 var user = null;
 var pets = [];
